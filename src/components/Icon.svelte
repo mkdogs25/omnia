@@ -1,0 +1,56 @@
+<script lang="ts">
+  const paths: Record<string, string> = {
+    folder: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+    'folder-plus': 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM12 10.5v5M9.5 13h5',
+    search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4',
+    bookmark: 'M6 4h12v17l-6-4-6 4z',
+    'new-note': 'M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6M18.5 3.5a2 2 0 0 1 3 3L12 16l-4 1 1-4z',
+    sort: 'M4 6h10M4 12h7M4 18h4M18 7v11m0 0l-3-3m3 3l3-3',
+    collapse: 'M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7',
+    'panel-left': 'M4 5h16v14H4zM9 5v14',
+    'panel-right': 'M4 5h16v14H4zM15 5v14',
+    layers: 'M12 3l9 5-9 5-9-5zM3 13l9 5 9-5',
+    'chevron-right': 'M9 6l6 6-6 6',
+    'chevron-down': 'M6 9l6 6 6-6',
+    'chevron-left': 'M15 6l-6 6 6 6',
+    'arrow-left': 'M19 12H5M11 6l-6 6 6 6',
+    'arrow-right': 'M5 12h14M13 6l6 6-6 6',
+    'book-open': 'M2 5h6a4 4 0 0 1 4 4v11a3 3 0 0 0-3-3H2zM22 5h-6a4 4 0 0 0-4 4v11a3 3 0 0 1 3-3h7z',
+    more: 'M12 5.5h.01M12 12h.01M12 18.5h.01',
+    plus: 'M12 5v14M5 12h14',
+    x: 'M6 6l12 12M18 6L6 18',
+    'check-square': 'M4 5h16v14H4zM8 12l3 3 5-6',
+    'circle-check': 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM8 12l3 3 5-6',
+    calendar: 'M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM4 10h16M8 3v4M16 3v4',
+    study: 'M2 9l10-5 10 5-10 5zM6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5M22 9v6',
+    notes: 'M6 3h8l5 5v13H6zM14 3v5h5M9 13h6M9 17h6',
+    help: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01',
+    settings: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z',
+    sun: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
+    moon: 'M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z',
+    link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
+    hash: 'M5 9h15M4 15h15M10 4L8 20M16 4l-2 16',
+    list: 'M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01',
+    clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2',
+    repeat: 'M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3',
+    lines: 'M4 7h16M4 12h16M4 17h10',
+    trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',
+    pencil: 'M4 20l1-4L16.5 4.5a2 2 0 0 1 3 3L8 19z',
+    play: 'M7 4l13 8-13 8z',
+    zap: 'M13 2L4 14h7l-1 8 9-12h-7z',
+    eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+    flame: 'M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-9z',
+    refresh: 'M20 11a8 8 0 0 0-14-4L4 9M4 4v5h5M4 13a8 8 0 0 0 14 4l2-2M20 20v-5h-5',
+    sunrise: 'M12 3v4M5.6 7.6l2.8 2.8M18.4 7.6l-2.8 2.8M3 17h18M7 17a5 5 0 0 1 10 0M5 21h14',
+    inbox: 'M3 13l3-8h12l3 8v6H3zM3 13h5a4 4 0 0 0 8 0h5',
+    'folder-open': 'M3 18V6a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v2M3 18l2.5-8h15.5l-2.5 8a2 2 0 0 1-2 1.5H5a2 2 0 0 1-2-1.5z',
+    file: 'M6 3h8l5 5v13H6zM14 3v5h5',
+    undo: 'M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3'
+  }
+  let { name, size = 18 }: { name: string; size?: number } = $props()
+</script>
+
+<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
+  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d={paths[name] ?? ''} />
+</svg>

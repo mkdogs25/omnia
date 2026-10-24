@@ -1,0 +1,80 @@
+/* Libron (headings): SIL OFL 1.1, (c) Nico Verbruggen. Inter (body): SIL OFL 1.1, (c) The Inter Project Authors. */
+@font-face { font-family: 'Libron'; font-weight: 400; font-style: normal; font-display: swap; src: url('../assets/fonts/Libron-Regular.woff2') format('woff2'); }
+@font-face { font-family: 'Libron'; font-weight: 700; font-style: normal; font-display: swap; src: url('../assets/fonts/Libron-Bold.woff2') format('woff2'); }
+@font-face { font-family: 'Libron'; font-weight: 400; font-style: italic; font-display: swap; src: url('../assets/fonts/Libron-Italic.woff2') format('woff2'); }
+@font-face { font-family: 'Libron'; font-weight: 700; font-style: italic; font-display: swap; src: url('../assets/fonts/Libron-BoldItalic.woff2') format('woff2'); }
+
+:root {
+  --font-heading: 'Libron', 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-body: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
+
+  --bg: #fcf5e1;
+  --bg-side: #f6ecd3;
+  --bg-raised: #fffaf0;
+  --bg-hover: rgba(120, 88, 36, 0.09);
+  --bg-active: rgba(120, 88, 36, 0.14);
+  --border: #e6dbbd;
+  --border-strong: #d8caa5;
+
+  --text: #2a2218;
+  --text-muted: #85785f;
+  --text-faint: #b3a78d;
+
+  --accent: #d95c3a;
+  --accent-strong: #c24a29;
+  --accent-soft: rgba(217, 92, 58, 0.14);
+  --on-accent: #fffaf0;
+  --italic: #d4700f;
+  --link: #c0502d;
+  --mark: rgba(244, 196, 48, 0.38);
+  --code-bg: rgba(120, 88, 36, 0.1);
+
+  --good: #5f8a3c;
+  --warn: #c98a12;
+  --bad: #c2412d;
+
+  --shadow: 0 8px 30px rgba(70, 48, 12, 0.18), 0 1px 3px rgba(70, 48, 12, 0.12);
+  --parchment:
+    radial-gradient(ellipse at 18% 8%, rgba(255, 250, 232, 0.9), transparent 55%),
+    radial-gradient(ellipse at 88% 92%, rgba(240, 218, 166, 0.55), transparent 60%),
+    linear-gradient(160deg, #fbf1d6, #f7e9c6);
+
+  --radius: 8px;
+  --sidebar-w: 300px;
+  --ribbon-w: 52px;
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --bg: #1e1913;
+  --bg-side: #17130e;
+  --bg-raised: #2a231b;
+  --bg-hover: rgba(255, 230, 180, 0.07);
+  --bg-active: rgba(255, 230, 180, 0.12);
+  --border: #352d23;
+  --border-strong: #463c2e;
+
+  --text: #ece1cb;
+  --text-muted: #a29679;
+  --text-faint: #6f6551;
+
+  --accent: #e8764f;
+  --accent-strong: #f08a64;
+  --accent-soft: rgba(232, 118, 79, 0.2);
+  --on-accent: #1e1913;
+  --italic: #f0963a;
+  --link: #ef8b66;
+  --mark: rgba(230, 180, 40, 0.3);
+  --code-bg: rgba(255, 230, 180, 0.1);
+
+  --good: #8bb766;
+  --warn: #e0a83a;
+  --bad: #e66a55;
+
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --parchment:
+    radial-gradient(ellipse at 18% 8%, rgba(60, 48, 32, 0.6), transparent 55%),
+    linear-gradient(160deg, #231d15, #1c1711);
+  color-scheme: dark;
+}

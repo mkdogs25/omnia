@@ -1,0 +1,97 @@
+/* Live-preview editor styling. Headings use Libron; body text uses Inter. */
+
+.editor .cm-editor { height: auto; background: transparent; outline: none; font-family: var(--font-body); }
+.editor .cm-editor.cm-focused { outline: none; }
+.editor .cm-scroller { font-family: var(--font-body); line-height: 1.7; overflow: visible; padding: 0 0 40vh; }
+.editor .cm-content {
+  font-size: var(--editor-size, 17px);
+  max-width: var(--editor-width, 46rem);
+  margin: 0 auto;
+  padding: 0 32px;
+  caret-color: var(--accent);
+}
+.editor .cm-line { padding: 0; }
+.editor .cm-cursor { border-left: 2px solid var(--accent) !important; }
+.editor .cm-selectionBackground, .editor .cm-editor .cm-selectionBackground { background: var(--accent-soft) !important; }
+.editor .cm-editor.cm-focused .cm-selectionBackground { background: var(--accent-soft) !important; }
+.editor .cm-activeLine { background: transparent; }
+
+/* Headings: Libron */
+.cm-h { font-family: var(--font-heading); font-weight: 700; line-height: 1.25; }
+.cm-h1 { font-size: 2.1em; padding: 1.1em 0 0.35em; border-bottom: 1px solid var(--border); margin-bottom: 0.6em; }
+.cm-h2 { font-size: 1.62em; padding: 1em 0 0.2em; }
+.cm-h3 { font-size: 1.32em; padding: 0.8em 0 0.1em; }
+.cm-h4 { font-size: 1.12em; padding: 0.6em 0 0; }
+.cm-h5, .cm-h6 { font-size: 1em; padding: 0.5em 0 0; color: var(--text-muted); }
+.cm-header-mark { font-family: var(--font-body); font-weight: 400; }
+.cm-formatting { color: var(--text-faint); font-weight: 400; font-style: normal; }
+.cm-formatting.cm-url { word-break: break-all; }
+
+/* Inline */
+.cm-em { font-style: italic; color: var(--italic); }
+.cm-strong { font-weight: 700; }
+.cm-strike { text-decoration: line-through; color: var(--text-muted); }
+.cm-highlight { background: var(--mark); border-radius: 3px; }
+.cm-inline-code {
+  font-family: var(--font-mono); font-size: 0.88em; background: var(--code-bg); border-radius: 4px; padding: 1px 4px;
+}
+.cm-link { color: var(--link); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--link) 45%, transparent); cursor: pointer; }
+.cm-wikilink { color: var(--link); cursor: pointer; border-bottom: 1px solid color-mix(in srgb, var(--link) 40%, transparent); }
+.cm-wikilink:hover { background: var(--accent-soft); }
+.cm-wikilink-missing { opacity: 0.65; border-bottom-style: dashed; }
+.cm-tag { color: var(--accent-strong); background: var(--accent-soft); border-radius: 99px; padding: 0 7px; font-size: 0.9em; cursor: pointer; }
+.cm-math-inline { display: inline-block; vertical-align: baseline; text-indent: 0; }
+.cm-math-block { text-align: center; padding: 0.4em 0; overflow-x: auto; }
+.cm-math-src, .cm-math-src-line { font-family: var(--font-mono); font-size: 0.9em; color: var(--text-muted); }
+.cm-math-src-line { background: var(--code-bg); }
+.katex { font-size: 1.08em; }
+
+/* Flashcard syntax */
+.cm-cloze { background: var(--accent-soft); border-radius: 4px; padding: 0 2px; }
+.cm-cloze-mark { color: var(--text-faint); font-size: 0.8em; }
+.cm-card-sep { color: var(--accent-strong); font-weight: 600; padding: 0 2px; }
+
+/* Blocks */
+.cm-quote { border-left: 3px solid var(--accent); padding-left: 14px; margin-left: 2px; color: var(--text-muted); }
+.cm-hr { border: 0; border-top: 2px solid var(--border-strong); margin: 1.1em 0; }
+.cm-frontmatter { font-family: var(--font-mono); font-size: 0.78em; color: var(--text-faint); line-height: 1.5; }
+
+.cm-codeblock { font-family: var(--font-mono); font-size: 0.86em; background: var(--code-bg); padding: 0 14px !important; line-height: 1.6; }
+.cm-code-first { border-radius: 8px 8px 0 0; padding-top: 6px !important; }
+.cm-code-last { border-radius: 0 0 8px 8px; padding-bottom: 6px !important; }
+.cm-fence { color: var(--text-faint); font-size: 0.74em; }
+.cm-quizblock { background: var(--accent-soft); }
+
+.cm-table-line { font-family: var(--font-body); font-size: 0.95em; border-bottom: 1px solid var(--border); }
+.cm-table-delim { color: var(--text-faint); }
+.cm-table-head { font-weight: 600; }
+
+/* Lists */
+.cm-li { position: relative; }
+.cm-lead { display: inline-block; text-indent: 0; text-align: right; padding-right: 0.55em; box-sizing: border-box; vertical-align: baseline; }
+.cm-lead-dot { color: var(--text-faint); font-size: 1.15em; line-height: 1; }
+.cm-lead-num { color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.cm-task-box { vertical-align: -3px; }
+.cm-task-done { color: var(--text-muted); text-decoration: line-through; text-decoration-color: var(--text-faint); }
+
+/* Images */
+.cm-image { display: inline-block; max-width: 100%; text-indent: 0; }
+.cm-image img { max-width: 100%; border-radius: 6px; display: block; }
+.cm-image.missing { color: var(--text-faint); font-size: 0.85em; border: 1px dashed var(--border-strong); border-radius: 6px; padding: 2px 8px; }
+
+/* Reading mode */
+.reading .cm-cursor { display: none !important; }
+
+/* Autocomplete + search panels */
+.editor .cm-tooltip {
+  background: var(--bg-raised) !important; border: 1px solid var(--border-strong) !important; border-radius: 9px !important;
+  box-shadow: var(--shadow); color: var(--text); overflow: hidden;
+}
+.editor .cm-tooltip-autocomplete > ul { font-family: var(--font-body) !important; max-height: 280px; }
+.editor .cm-tooltip-autocomplete > ul > li { padding: 4px 12px !important; }
+.editor .cm-tooltip-autocomplete > ul > li[aria-selected] { background: var(--accent-soft) !important; color: var(--text) !important; }
+.editor .cm-completionDetail { margin-left: 10px; color: var(--text-faint); font-style: normal; }
+.editor .cm-panels { background: var(--bg-raised) !important; color: var(--text); border-color: var(--border) !important; }
+.editor .cm-panels input, .editor .cm-panels button { font: inherit; }
+.editor .cm-searchMatch { background: var(--mark) !important; }
+.editor .cm-searchMatch-selected { background: color-mix(in srgb, var(--accent) 40%, transparent) !important; }
