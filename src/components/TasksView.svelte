@@ -67,7 +67,7 @@
 
 <section class="tasks parchment">
   <div class="inner">
-    <h1>Tasks <span class="count">{openCount(app.tasks)}</span></h1>
+    <h1 class="page-title">Tasks <span class="count">{openCount(app.tasks)}</span></h1>
 
     <div class="tabs-pill" role="tablist">
       {#each tabs as t}
@@ -90,7 +90,7 @@
     {#if tab === 'upcoming'}
       {#if late.length}
         <div class="week">
-          <h2 class="late">Overdue</h2>
+          <h2 class="section-title late">Overdue</h2>
           <div class="day"><div class="items">
             {#each late as t (t.id)}<TaskRow task={t} date={t.due} done={false} label={relativeLabel(t.due!, now)} />{/each}
           </div></div>
@@ -98,7 +98,7 @@
       {/if}
       {#each weeks as week (week.start)}
         <div class="week">
-          <h2>{formatWeekRange(week.start)}</h2>
+          <h2 class="section-title">{formatWeekRange(week.start)}</h2>
           {#each week.days as day (day.date)}
             <div class="day">
               <div class="day-head"><span class="num">{dayNumber(day.date)}</span><span class="name">{WEEKDAYS[fromISO(day.date).getDay()]}</span></div>
@@ -117,7 +117,7 @@
       {/each}
       {#each [...revisionsByDate.entries()].filter(([d]) => !weeks.some(w => w.days.some(x => x.date === d))).sort() as [date, paths] (date)}
         <div class="week">
-          <h2>{formatWeekRange(startOfWeek(date))}</h2>
+          <h2 class="section-title">{formatWeekRange(startOfWeek(date))}</h2>
           <div class="day">
             <div class="day-head"><span class="num">{dayNumber(date)}</span><span class="name">{WEEKDAYS[fromISO(date).getDay()]}</span></div>
             <div class="items">
@@ -161,29 +161,27 @@
 <style>
   .tasks { height: 100%; overflow: auto; }
   .parchment { background: var(--parchment); }
-  .inner { max-width: 860px; margin: 0 auto; padding: 48px 40px 120px; }
-  h1 { font-size: 46px; font-weight: 400; margin-bottom: 22px; }
-  .count { color: var(--text-faint); font-size: 0.85em; margin-left: 6px; }
+  .inner { max-width: 960px; margin: 0 auto; padding: 48px 40px 120px; }
+  .count { color: var(--text-faint); margin-left: 6px; }
   .tabs-pill { margin-bottom: 22px; }
   .add { display: flex; align-items: center; gap: 14px; padding: 4px 6px; }
-  .add input { flex: 1; min-width: 0; font-size: 18px; background: transparent; border: 0; outline: none; padding: 6px 0; }
+  .add input { flex: 1; min-width: 0; font-size: var(--fs-lg); background: transparent; border: 0; outline: none; padding: 6px 0; }
   .add input::placeholder { color: var(--text-muted); }
   .checkbox.ghost { display: inline-block; }
   .preview { display: inline-flex; gap: 6px; }
-  .tip { margin: 2px 0 18px 38px; font-size: 12.5px; color: var(--text-faint); }
+  .tip { margin: 2px 0 18px 38px; font-size: var(--fs-xs); color: var(--text-faint); }
   .week { margin-top: 26px; }
-  h2 { font-size: 30px; font-weight: 400; margin-bottom: 14px; }
   h2.late { color: var(--bad); }
   .day { margin: 18px 0; }
-  .day-head { display: flex; align-items: baseline; gap: 14px; font-size: 20px; margin-bottom: 4px; }
+  .day-head { display: flex; align-items: baseline; gap: 14px; font-size: var(--fs-xl); margin-bottom: 4px; }
   .day-head .num { width: 34px; color: var(--text-muted); text-align: right; }
   .items { margin-left: 46px; padding-left: 18px; border-left: 1px solid var(--border-strong); display: grid; gap: 2px; }
   .week > .day:only-child .items, h2.late + .day .items { margin-left: 0; }
   hr { border: 0; border-top: 1px solid var(--border-strong); margin: 28px 0 0; opacity: 0.6; }
   .plain { display: grid; gap: 2px; }
-  .rev { display: flex; align-items: center; gap: 14px; min-height: 40px; padding: 4px 6px; color: var(--text-muted); font-size: 17px; }
+  .rev { display: flex; align-items: center; gap: 14px; min-height: 40px; padding: 4px 6px; color: var(--text-muted); font-size: var(--fs-lg); }
   .rev button { color: var(--link); text-align: left; }
   .rev button:hover { text-decoration: underline; }
   .more { margin-top: 20px; }
-  .empty { font-size: 18px; padding: 40px 0; color: var(--text-muted); text-align: left; place-items: start; }
+  .empty { font-size: var(--fs-lg); padding: 40px 0; color: var(--text-muted); text-align: left; place-items: start; }
 </style>

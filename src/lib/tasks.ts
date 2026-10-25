@@ -15,6 +15,8 @@ export interface Task {
   completions?: ISODate[]
   /** Path of a linked note. */
   note?: string
+  /** Completed Pomodoro focus sessions spent on this task. */
+  pomodoros?: number
   created: ISODate
 }
 

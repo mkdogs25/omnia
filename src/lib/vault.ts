@@ -23,6 +23,12 @@ const IGNORED_DIRS = new Set(['node_modules', '.git', '.obsidian', '.trash', DAT
 export const NOTE_EXT = '.md'
 
 export const isNote = (path: string) => path.toLowerCase().endsWith(NOTE_EXT)
+/** Documents Omnia can read alongside your notes. */
+export const isDoc = (path: string) => /\.(pdf|docx)$/i.test(path)
+export const docKind = (path: string): 'pdf' | 'docx' | null => (/\.pdf$/i.test(path) ? 'pdf' : /\.docx$/i.test(path) ? 'docx' : null)
+/** The Markdown note that goes with a document, e.g. "Physics.pdf" -> "Physics notes.md". */
+export const companionPath = (docPath: string) =>
+  joinPath(dirname(docPath), `${basename(docPath).replace(/\.(pdf|docx)$/i, '')} notes.md`)
 export const basename = (path: string) => path.slice(path.lastIndexOf('/') + 1)
 export const dirname = (path: string) => (path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '')
 export const noteTitle = (path: string) => basename(path).replace(/\.md$/i, '')
@@ -62,9 +68,10 @@ export class Vault {
     return dir.getFileHandle(basename(path), { create })
   }
 
-  /** Lists every folder and Markdown file. Non-Markdown files are ignored. */
-  async scan(): Promise<{ tree: FolderEntry; notes: FileEntry[] }> {
+  /** Lists every folder, Markdown note and PDF/DOCX document. Other files are ignored. */
+  async scan(): Promise<{ tree: FolderEntry; notes: FileEntry[]; docs: FileEntry[] }> {
     const notes: FileEntry[] = []
+    const docs: FileEntry[] = []
     const walk = async (dir: FileSystemDirectoryHandle, path: string): Promise<Entry[]> => {
       const out: Entry[] = []
       const pending: Promise<void>[] = []
@@ -75,10 +82,10 @@ export class Vault {
           pending.push(walk(handle as FileSystemDirectoryHandle, p).then(children => {
             out.push({ kind: 'folder', name, path: p, children })
           }))
-        } else if (isNote(name)) {
+        } else if (isNote(name) || isDoc(name)) {
           pending.push((handle as FileSystemFileHandle).getFile().then(f => {
             const entry: FileEntry = { kind: 'file', name, path: p, mtime: f.lastModified, size: f.size }
-            notes.push(entry)
+            ;(isNote(name) ? notes : docs).push(entry)
             out.push(entry)
           }))
         }
@@ -87,7 +94,7 @@ export class Vault {
       return out
     }
     const children = await walk(this.root, '')
-    return { tree: { kind: 'folder', name: this.name, path: '', children }, notes }
+    return { tree: { kind: 'folder', name: this.name, path: '', children }, notes, docs }
   }
 
   async readText(path: string): Promise<string> {

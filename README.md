@@ -16,6 +16,8 @@ which Firefox and Safari don't offer.
 | **Tasks** | Today, Upcoming (grouped by week and day), Unplanned, Recurrences and Done tabs. Natural quick-add: `Daily Notes every tuesday`, `Hand in essay 31 oct`. Repeating tasks, notes, times, linked notes |
 | **Calendar** | Month and week views showing tasks, events, daily notes, due flashcards and note revisions. Drag tasks between days. Events with times, colours and repeats |
 | **Study sidebar** | Opens from any note. **Cards**: make flashcards inside the note. **Quiz**: build quizzes, or generate them from flashcards. **Revise**: a spaced-repetition schedule for the note itself |
+| **Reader** | Read **PDF** and **Word (.docx)** files from your folder beside a notes pane. Select text and *Quote to notes* to save it with a link back to the page (`[[Book.pdf#page=12\|p. 12]]`). PDFs have page navigation, zoom, contents, search, and dark pages. Notes about a document live in `<name> notes.md` next to it, so flashcards, quizzes and revision work on them too. Drop files onto the file list to add them |
+| **Pomodoro timer** | Focus and break timer in the ribbon (Alt+P): 25/5/15 minutes by default (editable), long break every 4th session, chime and notification, the countdown in the tab title, and optional task tracking. Focus minutes appear on the Study dashboard |
 | **Study dashboard** | Cards due, 14-day forecast, card maturity, activity heatmap, streak, recall rate, per-note decks |
 
 ### Flashcards and quizzes are plain Markdown
@@ -52,11 +54,12 @@ Everything is inside the folder you choose:
 ```
 your-folder/
   *.md                notes, exactly as you wrote them
+  *.pdf  *.docx       documents you want to read (never modified)
   .omnia/
     tasks.json        tasks
     events.json       calendar events
     study.json        review history, note revision schedule, quiz scores
-    settings.json     bookmarks, daily-notes folder, limits
+    settings.json     bookmarks, daily-notes folder, limits, timer durations
   .trash/             deleted notes (nothing is erased for good)
 ```
 
@@ -73,7 +76,7 @@ npm run check    # type check
 npm run build    # static site in dist/
 ```
 
-Stack: Vite, Svelte 5, TypeScript and CodeMirror 6, with KaTeX for maths. No backend, no database.
+Stack: Vite, Svelte 5, TypeScript and CodeMirror 6, with KaTeX for maths, PDF.js for PDFs and mammoth for Word files (both loaded only when you open a document). No backend, no database.
 
 ## Deploying to GitHub Pages
 
@@ -92,4 +95,4 @@ The build uses a relative base path, so it works at any URL.
   editor lives in separate repositories, so Omnia is a fresh, lighter implementation rather than a fork.
 - Headings use **Libron** by Nico Verbruggen (SIL OFL 1.1), built from the
   [sources](https://github.com/nicoverbruggen/libron). Body text uses **Inter** (SIL OFL 1.1).
-- Editor: [CodeMirror 6](https://codemirror.net). Maths: [KaTeX](https://katex.org).
+- Editor: [CodeMirror 6](https://codemirror.net). Maths: [KaTeX](https://katex.org). PDFs: [PDF.js](https://mozilla.github.io/pdf.js/) (Apache-2.0). Word files: [mammoth](https://github.com/mwilliamson/mammoth.js) (BSD-2-Clause), sanitised with [DOMPurify](https://github.com/cure53/DOMPurify).

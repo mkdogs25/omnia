@@ -40,6 +40,15 @@
     radial-gradient(ellipse at 88% 92%, rgba(240, 218, 166, 0.55), transparent 60%),
     linear-gradient(160deg, #fbf1d6, #f7e9c6);
 
+  /* One type scale for every page. Libron is only for titles and big numerals; Inter for everything else. */
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 15px;
+  --fs-lg: 17px;
+  --fs-xl: 20px;
+  --fs-section: 26px;
+  --fs-page: 44px;
+
   --radius: 8px;
   --sidebar-w: 300px;
   --ribbon-w: 52px;

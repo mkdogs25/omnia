@@ -7,6 +7,8 @@
   import Help from './Help.svelte'
   import Icon from './Icon.svelte'
   import NotesView from './NotesView.svelte'
+  import PomodoroPanel from './PomodoroPanel.svelte'
+  import { pomodoro } from '../lib/pomodoro.svelte'
   import QuizModal from './QuizModal.svelte'
   import ReviewModal from './ReviewModal.svelte'
   import RightPanel from './RightPanel.svelte'
@@ -41,12 +43,14 @@
     else if (mod && !e.shiftKey && !e.altKey && key === 'p') { e.preventDefault(); app.modal = { type: 'palette' } }
     else if (mod && e.shiftKey && key === 'f') { e.preventDefault(); app.view = 'notes'; app.leftOpen = true; app.sidebarTab = 'search' }
     else if (e.altKey && !mod && key === 'n') { e.preventDefault(); void app.createNote(app.currentFolder(), 'Untitled') }
+    else if (e.altKey && !mod && key === 'p') { e.preventDefault(); app.pomodoroOpen = !app.pomodoroOpen }
     else if (e.altKey && !mod && key === 'd') { e.preventDefault(); void app.openDaily() }
     else if (e.altKey && !mod && e.key === 'ArrowLeft') { e.preventDefault(); app.goBack() }
     else if (e.altKey && !mod && e.key === 'ArrowRight') { e.preventDefault(); app.goForward() }
   }
 
   onMount(() => {
+    pomodoro.restore()
     const tick = () => { if (document.visibilityState === 'visible') void app.refresh() }
     const timer = setInterval(tick, 6000)
     const flush = () => { void app.flush() }
@@ -76,6 +80,10 @@
       {/each}
     </div>
     <div class="bottom">
+      <button class="icon-btn pomo-btn" class:active={app.pomodoroOpen || pomodoro.running} data-pomo-toggle title="Pomodoro timer (Alt+P)" aria-label="Pomodoro timer" onclick={() => (app.pomodoroOpen = !app.pomodoroOpen)}>
+        <Icon name="timer" size={19} />
+        {#if pomodoro.active}<span class="pomo-time" class:live={pomodoro.running}>{pomodoro.label}</span>{/if}
+      </button>
       <button class="icon-btn" title="Theme: {app.theme}" onclick={() => app.setTheme(app.theme === 'auto' ? 'light' : app.theme === 'light' ? 'dark' : 'auto')}><Icon name={themeIcon} size={19} /></button>
       <button class="icon-btn" title="Command palette (Ctrl+P)" onclick={() => (app.modal = { type: 'palette' })}><Icon name="search" size={19} /></button>
       <button class="icon-btn" title="Settings" onclick={() => (app.modal = { type: 'settings' })}><Icon name="settings" size={19} /></button>
@@ -97,6 +105,7 @@
   {#if app.view === 'notes' && app.rightOpen}<RightPanel />{/if}
 </div>
 
+{#if app.pomodoroOpen}<PomodoroPanel />{/if}
 {#if app.modal?.type === 'switcher'}<Switcher mode="notes" />{/if}
 {#if app.modal?.type === 'palette'}<Switcher mode="commands" />{/if}
 {#if app.modal?.type === 'settings'}<Settings />{/if}
@@ -117,6 +126,9 @@
     box-sizing: content-box;
   }
   .icon-btn.big.active .badge { background: var(--bg-raised); color: var(--accent-strong); border-color: var(--accent); }
+  .pomo-btn { position: relative; height: 44px; flex-direction: column; gap: 0; }
+  .pomo-time { font-size: 10px; font-variant-numeric: tabular-nums; line-height: 1; color: var(--text-muted); margin-top: -1px; }
+  .pomo-time.live { color: var(--accent-strong); font-weight: 600; }
   .main { flex: 1; min-width: 0; position: relative; }
   .indexing { position: absolute; z-index: 20; top: 10px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 5px 14px; border-radius: 99px; font-size: 12.5px; }
 </style>

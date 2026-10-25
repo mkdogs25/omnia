@@ -128,7 +128,7 @@
 <section class="cal parchment">
   <div class="main">
     <header>
-      <h1>{title}</h1>
+      <h1 class="page-title">{title}</h1>
       <div class="controls">
         <div class="tabs-pill">
           <button class:on={mode === 'month'} onclick={() => (mode = 'month')}>Month</button>
@@ -196,7 +196,7 @@
   <aside class="panel">
     <div class="pad">
       <div class="when">
-        <h2>{WEEKDAYS[fromISO(selected).getDay()]}</h2>
+        <h2 class="section-title">{WEEKDAYS[fromISO(selected).getDay()]}</h2>
         <div class="muted">{formatLong(selected)} {#if selected === now}<span class="pill accent">Today</span>{/if}</div>
       </div>
 
@@ -230,7 +230,7 @@
         </div>
       {:else}
         <section>
-          <div class="sec-head"><h3>Events</h3><button class="icon-btn" title="New event" onclick={newEvent}><Icon name="plus" size={17} /></button></div>
+          <div class="sec-head"><h3 class="eyebrow">Events</h3><button class="icon-btn" title="New event" onclick={newEvent}><Icon name="plus" size={17} /></button></div>
           {#each selectedEvents as e (e.id)}
             <button class="ev-row" style:--c={e.color ?? COLORS[0]} onclick={() => editEvent(e.id)}>
               <span class="bar"></span>
@@ -243,7 +243,7 @@
         </section>
 
         <section>
-          <div class="sec-head"><h3>Tasks</h3></div>
+          <div class="sec-head"><h3 class="eyebrow">Tasks</h3></div>
           {#each lateTasks as t (t.id)}<TaskRow task={t} date={t.due} done={false} compact label="Overdue" />{/each}
           {#each selectedTasks as it (it.task.id + it.date)}<TaskRow task={it.task} date={it.date} done={it.done} compact showDate={false} />{/each}
           {#if !lateTasks.length && !selectedTasks.length}<p class="faint none">No tasks.</p>{/if}
@@ -254,7 +254,7 @@
 
         {#if selectedCards || selectedRevs.length}
           <section>
-            <div class="sec-head"><h3>Study</h3></div>
+            <div class="sec-head"><h3 class="eyebrow">Study</h3></div>
             {#if selectedCards}
               <div class="study-row"><Icon name="layers" size={16} /> {selectedCards} flashcard{selectedCards === 1 ? '' : 's'} due
                 {#if selected === now}<button class="btn primary" onclick={() => (app.modal = { type: 'review', scope: { type: 'all' } })}>Review</button>{/if}</div>
@@ -272,12 +272,12 @@
 <style>
   .cal { height: 100%; display: flex; overflow: hidden; }
   .parchment { background: var(--parchment); }
-  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 32px 28px 24px 36px; }
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 48px 28px 24px 40px; }
   header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
-  h1 { font-size: 40px; font-weight: 400; }
+  header .page-title { margin: 0; }
   .controls { display: flex; align-items: center; gap: 6px; }
   .controls .tabs-pill { margin-right: 10px; }
-  .heads { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0; padding: 0 2px 6px; color: var(--text-muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .heads { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0; padding: 0 2px 6px; color: var(--text-muted); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; }
   .heads span { padding-left: 10px; }
   .grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--border-strong); border-left: 1px solid var(--border-strong); }
   .cell {
@@ -288,40 +288,39 @@
   .cell.other { color: var(--text-faint); background: rgba(120, 88, 36, 0.04); }
   .cell.sel { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
   .cell.drop { background: var(--accent-soft); }
-  .num { display: flex; align-items: center; gap: 6px; font-size: 14px; min-height: 24px; }
+  .num { display: flex; align-items: center; gap: 6px; font-size: var(--fs-md); min-height: 24px; }
   .badge { background: var(--accent); color: var(--on-accent); border-radius: 99px; min-width: 24px; height: 24px; display: inline-grid; place-items: center; padding: 0 5px; font-weight: 600; }
   .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
   .chips { display: grid; gap: 2px; min-height: 0; overflow: hidden; }
-  .chip { display: flex; align-items: center; gap: 5px; padding: 1px 6px; border-radius: 5px; font-size: 12px; text-align: left; min-width: 0; line-height: 1.5; }
+  .chip { display: flex; align-items: center; gap: 5px; padding: 1px 6px; border-radius: 5px; font-size: var(--fs-xs); text-align: left; min-width: 0; line-height: 1.5; }
   .chip.ev { background: color-mix(in srgb, var(--c) 18%, transparent); border-left: 3px solid var(--c); }
   .chip.ev .t { color: var(--text-muted); flex: none; }
   .chip.task { color: var(--text); }
   .chip.task.done { color: var(--text-faint); text-decoration: line-through; }
   .chip.task :global(svg) { color: var(--accent); flex: none; }
-  .more { font-size: 11.5px; color: var(--text-muted); padding-left: 6px; }
-  .study { margin-top: auto; display: flex; gap: 8px; justify-content: flex-end; font-size: 11px; color: var(--text-muted); }
+  .more { font-size: var(--fs-xs); color: var(--text-muted); padding-left: 6px; }
+  .study { margin-top: auto; display: flex; gap: 8px; justify-content: flex-end; font-size: var(--fs-xs); color: var(--text-muted); }
   .study span { display: inline-flex; align-items: center; gap: 3px; }
 
   .panel { width: 340px; flex: none; border-left: 1px solid var(--border-strong); background: color-mix(in srgb, var(--bg-raised) 55%, transparent); overflow: auto; }
-  .pad { padding: 30px 24px 60px; display: grid; gap: 18px; }
-  .when h2 { font-size: 32px; font-weight: 400; }
+  .pad { padding: 48px 24px 60px; display: grid; gap: 18px; }
+  .when .section-title { margin-bottom: 4px; }
   .daily { justify-self: start; }
   .sec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-  h3 { font-size: 13px; font-family: var(--font-body); text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); font-weight: 600; }
-  .none { margin: 4px 0; font-size: 13.5px; }
+  .none { margin: 4px 0; font-size: var(--fs-sm); }
   .ev-row { display: flex; align-items: stretch; gap: 10px; width: 100%; text-align: left; padding: 6px 8px; border-radius: 8px; }
   .ev-row:hover { background: var(--bg-hover); }
   .bar { width: 4px; border-radius: 4px; background: var(--c); flex: none; }
-  .ev-title { display: block; font-size: 15px; }
-  .ev-when { display: block; font-size: 12.5px; }
+  .ev-title { display: block; font-size: var(--fs-md); }
+  .ev-when { display: block; font-size: var(--fs-xs); }
   .addtask { display: flex; align-items: center; gap: 8px; padding: 4px 6px; color: var(--text-muted); }
-  .addtask input { flex: 1; background: transparent; border: 0; outline: none; font-size: 14px; }
-  .study-row { display: flex; align-items: center; gap: 8px; font-size: 14px; padding: 4px 0; flex-wrap: wrap; }
+  .addtask input { flex: 1; background: transparent; border: 0; outline: none; font-size: var(--fs-md); }
+  .study-row { display: flex; align-items: center; gap: 8px; font-size: var(--fs-md); padding: 4px 0; flex-wrap: wrap; }
   .study-row .btn { padding: 2px 12px; margin-left: auto; }
   .link { color: var(--link); text-align: left; }
   .evform { display: grid; gap: 10px; }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  label { display: grid; gap: 3px; font-size: 12px; color: var(--text-muted); }
+  label { display: grid; gap: 3px; font-size: var(--fs-xs); color: var(--text-muted); }
   .swatches { display: flex; gap: 8px; }
   .sw { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; }
   .sw.on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px currentColor; color: var(--text); }

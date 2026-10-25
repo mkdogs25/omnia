@@ -1,5 +1,6 @@
 import { app } from './app.svelte'
 import { noteTitle } from './vault'
+import { pomodoro } from './pomodoro.svelte'
 
 export interface Command {
   id: string
@@ -22,6 +23,8 @@ export function getCommands(): Command[] {
     { id: 'go-study', label: 'Go to Study dashboard', run: () => (app.view = 'study') },
     { id: 'toggle-left', label: 'Toggle file sidebar', run: () => (app.leftOpen = !app.leftOpen) },
     { id: 'toggle-right', label: 'Toggle study sidebar', run: () => (app.rightOpen = !app.rightOpen) },
+    { id: 'pomo-toggle', label: pomodoro.running ? 'Pomodoro: pause timer' : 'Pomodoro: start timer', hint: 'Alt+P to open', run: () => { app.pomodoroOpen = true; pomodoro.toggle() } },
+    { id: 'pomo-skip', label: 'Pomodoro: skip to next session', run: () => pomodoro.skip() },
     { id: 'review-all', label: 'Review all due flashcards', run: () => (app.modal = { type: 'review', scope: { type: 'all' } }) },
     { id: 'theme', label: 'Cycle theme (auto, light, dark)', run: () => app.setTheme(app.theme === 'auto' ? 'light' : app.theme === 'light' ? 'dark' : 'auto') },
     { id: 'settings', label: 'Open settings', run: () => (app.modal = { type: 'settings' }) },

@@ -45,6 +45,7 @@
     inbox: 'M3 13l3-8h12l3 8v6H3zM3 13h5a4 4 0 0 0 8 0h5',
     'folder-open': 'M3 18V6a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v2M3 18l2.5-8h15.5l-2.5 8a2 2 0 0 1-2 1.5H5a2 2 0 0 1-2-1.5z',
     file: 'M6 3h8l5 5v13H6zM14 3v5h5',
+    timer: 'M10 2h4M12 14l3-3M12 6a8 8 0 1 0 0 16 8 8 0 0 0 0-16z',
     undo: 'M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3'
   }
   let { name, size = 18 }: { name: string; size?: number } = $props()

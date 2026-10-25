@@ -1,6 +1,7 @@
 <script lang="ts">
   import { app } from '../lib/app.svelte'
-  import { noteTitle } from '../lib/vault'
+  import { isDoc, noteTitle } from '../lib/vault'
+  import DocView from './DocView.svelte'
   import Editor from './Editor.svelte'
   import Icon from './Icon.svelte'
   import Menu, { type MenuItem } from './Menu.svelte'
@@ -14,6 +15,7 @@
   const rec = $derived(app.record(path))
   const backlinkCount = $derived(path ? app.backlinks(path).length : 0)
   const title = $derived(path ? noteTitle(path) : '')
+  const doc = $derived(!!path && isDoc(path))
 
   async function commitTitle(value: string) {
     if (!path) return
@@ -23,7 +25,7 @@
   }
 
   function openMore(e: MouseEvent) {
-    if (!path) return
+    if (!path || doc) return
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
     const revising = !!app.study.revisions[path]
     menu = {
@@ -93,7 +95,7 @@
     <button class="icon-btn" title="Back (Alt+Left)" disabled={!app.canGoBack} onclick={() => app.goBack()}><Icon name="arrow-left" size={19} /></button>
     <button class="icon-btn" title="Forward (Alt+Right)" disabled={!app.canGoForward} onclick={() => app.goForward()}><Icon name="arrow-right" size={19} /></button>
     <span class="grow"></span>
-    {#if path}
+    {#if path && !doc}
       <button class="icon-btn" class:active={app.rightOpen && app.rightTab === 'cards'} title="Flashcards" onclick={() => openRight('cards')}><Icon name="layers" size={19} /></button>
       <button class="icon-btn" class:active={app.rightOpen && app.rightTab === 'quiz'} title="Quiz" onclick={() => openRight('quiz')}><Icon name="zap" size={19} /></button>
       <button class="icon-btn" class:active={app.rightOpen && app.rightTab === 'revise'} title="Spaced repetition" onclick={() => openRight('revise')}><Icon name="repeat" size={19} /></button>
@@ -110,12 +112,14 @@
     </div>
   {/if}
 
-  {#if path}
+  {#if path && doc}
+    <DocView {path} />
+  {:else if path}
     <div class="page" style:--editor-width={app.settings.readableWidth ? '52rem' : '100%'}>
       <input class="title" bind:this={titleInput} value={title} spellcheck="false"
         onblur={e => commitTitle(e.currentTarget.value)}
         onkeydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); app.editor?.focus() } if (e.key === 'Escape') { e.currentTarget.value = title; e.currentTarget.blur() } }} />
-      <div class="body"><Editor bind:this={editor} /></div>
+      <div class="body"><Editor bind:this={editor} {path} /></div>
     </div>
     <footer class="status">
       <span class="muted">{backlinkCount} {backlinkCount === 1 ? 'backlink' : 'backlinks'}</span>

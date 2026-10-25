@@ -79,6 +79,7 @@
       {#if task.notes}<span class="ico" title="Has notes"><Icon name="lines" size={15} /></span>{/if}
       {#if task.note}<span class="ico" title="Linked note"><Icon name="link" size={14} /></span>{/if}
       {#if recurring}<span class="ico" title="Repeats"><Icon name="repeat" size={14} /></span>{/if}
+      {#if task.pomodoros}<span class="ico" title="{task.pomodoros} focus session{task.pomodoros === 1 ? '' : 's'}"><Icon name="timer" size={14} />{task.pomodoros}</span>{/if}
     </button>
     {#if task.time}<span class="when">{formatTime(task.time)}</span>{/if}
     {#if showDate && rightLabel}<span class="date" class:overdue>{rightLabel}</span>{/if}
@@ -139,24 +140,24 @@
   .task { border-radius: 10px; }
   .line { display: flex; align-items: center; gap: 14px; min-height: 40px; padding: 4px 6px; border-radius: 8px; }
   .line:hover { background: var(--bg-hover); }
-  .title { display: flex; align-items: center; gap: 10px; text-align: left; font-size: 17px; min-width: 0; }
+  .title { display: flex; align-items: center; gap: 10px; text-align: left; font-size: var(--fs-lg); min-width: 0; }
   .text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .text.struck { text-decoration: line-through; color: var(--text-faint); }
-  .ico { color: var(--text-muted); display: inline-flex; }
-  .when { color: var(--text-muted); font-size: 14px; }
-  .date { color: var(--text-muted); font-size: 15px; white-space: nowrap; }
+  .ico { color: var(--text-muted); display: inline-flex; align-items: center; gap: 3px; font-size: var(--fs-xs); }
+  .when { color: var(--text-muted); font-size: var(--fs-md); }
+  .date { color: var(--text-muted); font-size: var(--fs-md); white-space: nowrap; }
   .date.overdue { color: var(--bad); }
   .compact .line { min-height: 34px; gap: 10px; }
-  .compact .title { font-size: 14.5px; }
-  .compact .date { font-size: 12.5px; }
+  .compact .title { font-size: var(--fs-md); }
+  .compact .date { font-size: var(--fs-xs); }
   .editor { margin: 4px 0 12px 32px; padding: 14px; display: grid; gap: 10px; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 12px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-  label { display: grid; gap: 3px; font-size: 12px; color: var(--text-muted); }
-  .custom { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
+  label { display: grid; gap: 3px; font-size: var(--fs-xs); color: var(--text-muted); }
+  .custom { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--fs-md); }
   .num { width: 70px; }
   .unit { width: 110px; }
   .days { display: flex; gap: 4px; flex-wrap: wrap; }
-  .chip { padding: 3px 9px; border-radius: 99px; border: 1px solid var(--border-strong); font-size: 12.5px; }
+  .chip { padding: 3px 9px; border-radius: 99px; border: 1px solid var(--border-strong); font-size: var(--fs-xs); }
   .chip.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
   .actions { margin-top: 2px; }
 </style>

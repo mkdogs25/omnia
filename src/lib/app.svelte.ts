@@ -1,7 +1,7 @@
 import { untrack } from 'svelte'
 import { addDays, today, type ISODate } from './dates'
 import {
-  basename, dirname, ensurePermission, forgetHandle, fsSupported, isNote, joinPath, loadHandle, noteTitle,
+  basename, companionPath, dirname, ensurePermission, forgetHandle, fsSupported, isDoc, isNote, joinPath, loadHandle, noteTitle,
   pickFolder, saveHandle, Vault, type FileEntry, type FolderEntry
 } from './vault'
 import { NoteIndex, renameLinkTarget } from './noteindex'
@@ -25,10 +25,17 @@ export interface Settings {
   fontSize: number
   readableWidth: boolean
   spellcheck: boolean
+  focusMin: number
+  shortMin: number
+  longMin: number
+  longEvery: number
+  pomoAutoStart: boolean
+  pomoSound: boolean
 }
 
 const DEFAULT_SETTINGS: Settings = {
-  dailyFolder: 'Daily', bookmarks: [], newPerDay: 20, fontSize: 18, readableWidth: true, spellcheck: true
+  dailyFolder: 'Daily', bookmarks: [], newPerDay: 20, fontSize: 18, readableWidth: true, spellcheck: true,
+  focusMin: 25, shortMin: 5, longMin: 15, longEvery: 4, pomoAutoStart: false, pomoSound: true
 }
 
 export interface Tab { id: string; path: string }
@@ -85,6 +92,7 @@ class AppState {
   historyVersion = $state(0)
   readingMode = $state(false)
   modal = $state<Modal | null>(null)
+  pomodoroOpen = $state(false)
   toasts = $state<Toast[]>([])
   searchQuery = $state('')
   expanded = $state<Record<string, boolean>>({})
@@ -104,6 +112,10 @@ class AppState {
   /** A heading to scroll to once the note it belongs to has opened. */
   pendingHeading = $state<{ path: string; heading: string } | null>(null)
   pendingLine = $state<{ path: string; line: number } | null>(null)
+  /** A page to jump to once the PDF it belongs to has opened. */
+  pendingPage = $state<{ path: string; page: number } | null>(null)
+  /** The note the editor currently has open (it may be a document's companion note). */
+  editorPath = $state<string | null>(null)
   dirty = new Set<string>()
 
   private toastId = 0
@@ -240,9 +252,12 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
     if (!vault || this.refreshing) return
     this.refreshing = true
     try {
-      const { tree, notes } = await vault.scan()
+      const { tree, notes, docs } = await vault.scan()
       this.tree = tree
-      const seen = new Set(notes.map(n => n.path))
+      const docPaths = new Set(docs.map(d => d.path))
+      const docsChanged = docPaths.size !== this.index.docs.size || [...docPaths].some(p => !this.index.docs.has(p))
+      this.index.docs = docPaths
+      const seen = new Set([...notes.map(n => n.path), ...docPaths])
       for (const p of [...this.index.notes.keys()]) if (!seen.has(p)) this.index.delete(p)
       const stale = notes.filter(n => this.index.notes.get(n.path)?.mtime !== n.mtime)
       if (initial && stale.length) this.indexing = { done: 0, total: stale.length }
@@ -259,8 +274,8 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
       }
       await Promise.all(Array.from({ length: 6 }, worker))
       this.indexing = null
-      if (stale.length || initial) this.index.rebuild()
-      if (stale.length || initial) this.bump()
+      if (stale.length || initial || docsChanged) this.index.rebuild()
+      if (stale.length || initial || docsChanged) this.bump()
       // Drop tabs whose files vanished.
       const missing = this.tabs.filter(t => !seen.has(t.path))
       for (const t of missing) this.closeTab(t.id, true)
@@ -288,6 +303,61 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
 
   get activePath(): string | null {
     return this.activeTab?.path ?? null
+  }
+
+  /**
+   * The note the study panels work on: the open note, or for a PDF/DOCX tab the companion note
+   * where its notes are kept (if it exists yet).
+   */
+  get contextNote(): string | null {
+    this.indexVersion
+    const p = this.activePath
+    if (!p) return null
+    if (!isDoc(p)) return p
+    const c = companionPath(p)
+    return this.index.notes.has(c) ? c : null
+  }
+
+  /** Creates the notes file that goes with a document, if it isn't there yet, and returns its path. */
+  async ensureCompanion(docPath: string): Promise<string | null> {
+    const path = companionPath(docPath)
+    if (this.index.notes.has(path)) return path
+    const title = basename(docPath).replace(/\.(pdf|docx)$/i, '')
+    const created = await this.createNote(dirname(docPath), basename(path).replace(/\.md$/, ''), false, `# Notes on ${title}\n\nSource: [[${basename(docPath)}]]\n\n`)
+    return created
+  }
+
+  /** Appends text to a note, through the editor if that note is open there, otherwise on disk. */
+  async appendToNote(path: string, text: string) {
+    if (this.editor && this.editorPath === path) {
+      this.editor.appendText(text)
+      return
+    }
+    const current = this.index.notes.get(path)?.text ?? ''
+    const next = current + (current && !current.endsWith('\n') ? '\n' : '') + text
+    await this.saveNote(path, next)
+    this.index.rebuild()
+    this.bump()
+  }
+
+  /** Copies dropped files (notes, PDFs, Word documents, images) into a folder of the vault. */
+  async importFiles(files: File[], folder: string) {
+    const vault = this.vault
+    if (!vault) return
+    let added = 0
+    for (const f of files) {
+      if (!/\.(md|pdf|docx|png|jpe?g|gif|webp|svg)$/i.test(f.name)) continue
+      const stem = f.name.replace(/\.[^.]+$/, '')
+      const ext = f.name.slice(stem.length)
+      let path = joinPath(folder, f.name)
+      for (let n = 1; await vault.exists(path); n++) path = joinPath(folder, `${stem} ${n}${ext}`)
+      await vault.writeBlob(path, f)
+      added++
+    }
+    if (added) {
+      await this.refresh()
+      this.toast(`Added ${added} file${added === 1 ? '' : 's'}`)
+    } else this.toast('Only notes, PDFs, Word documents and images can be added')
   }
 
   noteList(): FileEntry[] {
@@ -376,10 +446,16 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
   /** Follows a [[link]], creating the note if it doesn't exist yet. */
   async openLink(target: string, fromPath: string, opts: { newTab?: boolean; heading?: string } = {}) {
     const found = this.index.resolve(target, fromPath)
+    if (found && isDoc(found)) {
+      const page = opts.heading?.match(/^page=(\d+)$/i)
+      if (page) this.pendingPage = { path: found, page: +page[1] }
+      return this.openNote(found, opts)
+    }
     if (found) {
       if (opts.heading) this.pendingHeading = { path: found, heading: opts.heading }
       return this.openNote(found, opts)
     }
+    if (isDoc(target)) return this.toast(`Couldn't find "${target}" in this folder`)
     const path = await this.createNote(dirname(fromPath), target.replace(/\.md$/i, ''), false, '')
     if (path) this.openNote(path, opts)
   }
@@ -404,7 +480,7 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
       const raw = localStorage.getItem(this.sessionKey())
       if (!raw) return
       const s = JSON.parse(raw) as { tabs: string[]; active: string | null }
-      const paths = s.tabs.filter(p => this.index.notes.has(p))
+      const paths = s.tabs.filter(p => this.index.notes.has(p) || this.index.docs.has(p))
       this.tabs = paths.map(p => ({ id: uid(), path: p }))
       const active = this.tabs.find(t => t.path === s.active) ?? this.tabs[0]
       this.activeTabId = active?.id ?? null
@@ -420,7 +496,7 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
   uniquePath(folder: string, base: string, ext = '.md'): string {
     let name = base
     let n = 1
-    while (this.index.notes.has(joinPath(folder, name + ext)) || this.hasFolder(joinPath(folder, name))) name = `${base} ${n++}`
+    while (this.index.notes.has(joinPath(folder, name + ext)) || this.index.docs.has(joinPath(folder, name + ext)) || this.hasFolder(joinPath(folder, name))) name = `${base} ${n++}`
     return joinPath(folder, name + ext)
   }
 
@@ -477,7 +553,7 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
     if (to === path) return
     try {
       await vault.move(path, to)
-      if (isNoteFile) await this.rewriteLinks(noteTitle(path), noteTitle(to), to)
+      await this.rewriteLinks(isNoteFile ? noteTitle(path) : basename(path), isNoteFile ? noteTitle(to) : basename(to), to)
       this.remapPaths(path, to)
       await this.refresh()
       this.index.rebuild()
@@ -676,6 +752,15 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
   restoreStudy(snapshot: StudyData) {
     this.study = snapshot
     this.persistSoon.study()
+  }
+
+  /** Adds completed focus minutes to today's total and, optionally, a task's tomato count. */
+  logFocus(minutes: number, taskId: string | null) {
+    const date = today()
+    this.study = { ...this.study, focus: { ...this.study.focus, [date]: (this.study.focus[date] ?? 0) + minutes } }
+    this.persistSoon.study()
+    const task = taskId ? this.tasks.find(t => t.id === taskId) : undefined
+    if (task) this.updateTask(task.id, { pomodoros: (task.pomodoros ?? 0) + 1 })
   }
 
   recordQuiz(result: QuizResult) {

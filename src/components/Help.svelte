@@ -7,6 +7,7 @@
     ['Ctrl P', 'Command palette'],
     ['Alt N', 'New note'],
     ['Alt D', "Today's daily note"],
+    ['Alt P', 'Pomodoro timer'],
     ['Ctrl Shift F', 'Search all notes'],
     ['Alt ← / →', 'Back and forward'],
     ['Ctrl B / I / E', 'Bold, italic, inline code'],
@@ -19,7 +20,7 @@
 
 <Modal onclose={() => (app.modal = null)} width={720} label="Help">
   <div class="wrap">
-    <h2>Help</h2>
+    <h2 class="section-title">Help</h2>
     <div class="cols">
       <section>
         <h3>Flashcards and quizzes live in your notes</h3>
@@ -39,6 +40,7 @@ Which is a vector?
 - Mass
 > Velocity has direction.
 ```</pre>
+        <p class="muted">Drop a <code>.pdf</code> or <code>.docx</code> onto the file list to read it. Select text and choose <em>Quote to notes</em>; the quote is saved with a link back to its page, such as <code>[[Book.pdf#page=12|p. 12]]</code>.</p>
         <p class="muted">Use <code>- [ ] </code> for checkboxes, <code>[[Note]]</code> for links, <code>#tag</code> for tags, <code>$E=mc^2$</code> for maths.</p>
       </section>
       <section>
@@ -57,8 +59,7 @@ Which is a vector?
 
 <style>
   .wrap { padding: 24px 28px; display: grid; gap: 16px; }
-  h2 { font-size: 28px; }
-  h3 { font-size: 17px; margin-bottom: 8px; }
+  h3 { font-family: var(--font-body); font-size: var(--fs-md); font-weight: 600; margin-bottom: 8px; }
   .cols { display: grid; grid-template-columns: 1.15fr 1fr; gap: 28px; }
   @media (max-width: 700px) { .cols { grid-template-columns: 1fr; } }
   pre { background: var(--code-bg); padding: 10px 12px; border-radius: 8px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.55; overflow: auto; margin: 0 0 10px; }

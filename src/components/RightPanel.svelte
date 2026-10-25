@@ -27,16 +27,16 @@
     <button class="icon-btn" title="Close panel" onclick={() => (app.rightOpen = false)}><Icon name="x" size={17} /></button>
   </header>
 
-  {#if app.activePath}
-    <div class="note-name truncate" title={app.activePath}>{noteTitle(app.activePath)}</div>
+  {#if app.contextNote}
+    <div class="note-name truncate" title={app.contextNote}>{noteTitle(app.contextNote)}</div>
     <div class="body">
-      {#if app.rightTab === 'info'}<InfoPanel path={app.activePath} />
-      {:else if app.rightTab === 'cards'}<CardsPanel path={app.activePath} />
-      {:else if app.rightTab === 'quiz'}<QuizPanel path={app.activePath} />
-      {:else}<RevisePanel path={app.activePath} />{/if}
+      {#if app.rightTab === 'info'}<InfoPanel path={app.contextNote} />
+      {:else if app.rightTab === 'cards'}<CardsPanel path={app.contextNote} />
+      {:else if app.rightTab === 'quiz'}<QuizPanel path={app.contextNote} />
+      {:else}<RevisePanel path={app.contextNote} />{/if}
     </div>
   {:else}
-    <div class="empty">Open a note to see its links, cards and quizzes.</div>
+    <div class="empty">{app.activePath ? 'Start taking notes on this document to see its links, cards and quizzes here.' : 'Open a note to see its links, cards and quizzes.'}</div>
   {/if}
 </aside>
 

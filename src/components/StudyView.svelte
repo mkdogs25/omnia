@@ -65,7 +65,7 @@
 
 <section class="study parchment">
   <div class="inner">
-    <h1>Study</h1>
+    <h1 class="page-title">Study</h1>
 
     <div class="hero">
       <div>
@@ -82,13 +82,14 @@
     <div class="tiles">
       <div class="tile"><span class="v">{dueRevisions}</span><span class="l">notes to revise</span></div>
       <div class="tile"><span class="v">{cards.length}</span><span class="l">cards in total</span></div>
+      <div class="tile"><span class="v"><Icon name="timer" size={20} /> {app.study.focus[now] ?? 0}</span><span class="l">focus minutes today</span></div>
       <div class="tile"><span class="v"><Icon name="flame" size={20} /> {run}</span><span class="l">day streak</span></div>
       <div class="tile"><span class="v">{ret === null ? '–' : Math.round(ret * 100) + '%'}</span><span class="l">recalled, last 30 days</span></div>
     </div>
 
     <div class="two">
       <div class="panel">
-        <h2>Next 14 days</h2>
+        <h2 class="section-title">Next 14 days</h2>
         <div class="forecast" role="img" aria-label="Flashcards due per day for the next 14 days">
           {#each fc as n, i}
             <div class="col" title="{relativeLabel(addDays(now, i), now)}: {n} due">
@@ -100,7 +101,7 @@
         </div>
       </div>
       <div class="panel">
-        <h2>Your cards</h2>
+        <h2 class="section-title">Your cards</h2>
         <div class="stack" role="img" aria-label="Card maturity">
           <span class="seg s0" style:flex={maturity.fresh} title="New"></span>
           <span class="seg s1" style:flex={maturity.learning} title="Learning"></span>
@@ -119,7 +120,7 @@
     </div>
 
     <div class="panel">
-      <h2>Activity</h2>
+      <h2 class="section-title">Activity</h2>
       <div class="heat" role="img" aria-label="Reviews per day over the last {weeksShown} weeks">
         {#each cellsOf as d (d)}
           <span class="cellh l{d > now ? 'x' : level(d)}" title="{d}: {app.study.log[d]?.reviews ?? 0} reviews"></span>
@@ -129,7 +130,7 @@
 
     <div class="panel">
       <div class="head">
-        <h2>Revision schedule</h2>
+        <h2 class="section-title">Revision schedule</h2>
       </div>
       {#each revisionRows as r (r.path)}
         <div class="rowx">
@@ -145,7 +146,7 @@
 
     <div class="panel">
       <div class="head">
-        <h2>Decks</h2>
+        <h2 class="section-title">Decks</h2>
         <input class="field search" placeholder="Filter notes…" bind:value={filter} />
       </div>
       {#if tagsWithCards.length}
@@ -171,7 +172,7 @@
 
     {#if app.study.quizzes.length}
       <div class="panel">
-        <h2>Recent quizzes</h2>
+        <h2 class="section-title">Recent quizzes</h2>
         {#each [...app.study.quizzes].reverse().slice(0, 6) as r}
           <div class="rowx"><Icon name="zap" size={16} /><span class="grow truncate">{r.path ? noteTitle(r.path) : 'All notes'}</span><span class="muted small">{formatShort(r.date)}</span><strong>{r.correct}/{r.total}</strong></div>
         {/each}
@@ -183,37 +184,37 @@
 <style>
   .study { height: 100%; overflow: auto; }
   .parchment { background: var(--parchment); }
-  .inner { max-width: 980px; margin: 0 auto; padding: 44px 40px 120px; display: grid; gap: 22px; }
-  h1 { font-size: 46px; font-weight: 400; }
-  h2 { font-size: 22px; font-weight: 700; margin-bottom: 12px; }
+  .inner { max-width: 960px; margin: 0 auto; padding: 48px 40px 120px; display: grid; gap: 22px; }
+  .inner .page-title { margin-bottom: 0; }
+  .panel .section-title, .head .section-title { margin-bottom: 12px; }
   .hero { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; padding: 26px 30px; border-radius: 18px; background: var(--bg-raised); border: 1px solid var(--border); box-shadow: 0 2px 14px rgba(90, 60, 20, 0.08); }
-  .hero-num { font-family: var(--font-heading); font-size: 64px; line-height: 1; font-weight: 700; color: var(--accent-strong); }
+  .hero-num { font-family: var(--font-heading); font-size: 64px; line-height: 1; font-weight: 400; color: var(--accent-strong); }
   .hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
   .tile { background: var(--bg-raised); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; display: grid; gap: 2px; }
-  .tile .v { font-family: var(--font-heading); font-size: 32px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
+  .tile .v { font-family: var(--font-heading); font-size: 32px; font-weight: 400; display: inline-flex; align-items: center; gap: 6px; }
   .tile .v :global(svg) { color: var(--accent); }
-  .tile .l { font-size: 13px; color: var(--text-muted); }
+  .tile .l { font-size: var(--fs-sm); color: var(--text-muted); }
   .two { display: grid; grid-template-columns: 1.4fr 1fr; gap: 22px; }
   @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
   .panel { background: var(--bg-raised); border: 1px solid var(--border); border-radius: 16px; padding: 20px 22px; }
   .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
-  .head h2 { margin: 0; }
+  .head .section-title { margin: 0; }
   .search { width: 220px; }
   .forecast { display: flex; align-items: flex-end; gap: 6px; height: 150px; }
   .col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
   .col .bar { width: 100%; max-width: 28px; min-height: 2px; background: color-mix(in srgb, var(--accent) 65%, var(--bg-raised)); border-radius: 5px 5px 0 0; }
   .col .bar.today { background: var(--accent-strong); }
-  .col .num { font-size: 11px; color: var(--text-muted); min-height: 14px; }
-  .col .lab { font-size: 11px; color: var(--text-faint); }
+  .col .num { font-size: var(--fs-xs); color: var(--text-muted); min-height: 14px; }
+  .col .lab { font-size: var(--fs-xs); color: var(--text-faint); }
   .stack { display: flex; height: 22px; border-radius: 11px; overflow: hidden; background: var(--bg-active); gap: 2px; }
   .seg { min-width: 0; }
   .s0 { background: #3f7ca8; } .s1 { background: var(--warn); } .s2 { background: #86a85f; } .s3 { background: var(--good); }
-  .legend { list-style: none; padding: 0; margin: 14px 0 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; font-size: 14px; }
+  .legend { list-style: none; padding: 0; margin: 14px 0 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; font-size: var(--fs-md); }
   .legend li { display: flex; align-items: center; gap: 8px; }
   .legend strong { margin-left: auto; }
   .sw { width: 10px; height: 10px; border-radius: 3px; }
-  .small { font-size: 12.5px; }
+  .small { font-size: var(--fs-xs); }
   .heat { display: grid; grid-template-rows: repeat(7, 16px); grid-auto-flow: column; grid-auto-columns: minmax(14px, 1fr); gap: 4px; overflow-x: auto; padding-bottom: 4px; }
   .cellh { border-radius: 3px; background: var(--bg-active); }
   .cellh.l1 { background: color-mix(in srgb, var(--accent) 30%, var(--bg-raised)); }
@@ -226,10 +227,10 @@
   .rowx { display: flex; align-items: center; gap: 12px; padding: 7px 0; border-top: 1px solid var(--border); min-height: 46px; }
   .rowx:first-of-type { border-top: 0; }
   .rowx > :global(svg) { color: var(--text-muted); flex: none; }
-  .name { text-align: left; font-size: 15.5px; }
+  .name { text-align: left; font-size: var(--fs-md); }
   .name:hover { color: var(--link); }
-  .dir { font-size: 12px; margin-left: 6px; }
-  .cnt { font-size: 13px; min-width: 52px; text-align: right; color: var(--text-muted); }
+  .dir { font-size: var(--fs-xs); margin-left: 6px; }
+  .cnt { font-size: var(--fs-sm); min-width: 52px; text-align: right; color: var(--text-muted); }
   .cnt.hot { color: var(--accent-strong); font-weight: 700; }
   .late { color: var(--accent-strong); font-weight: 600; }
   p { margin: 6px 0; line-height: 1.6; }

@@ -38,7 +38,7 @@ kbd {
 
 .btn {
   display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 7px;
-  background: var(--bg-hover); color: var(--text); font-weight: 500; font-size: 13.5px;
+  background: var(--bg-hover); color: var(--text); font-weight: 500; font-size: var(--fs-sm);
   border: 1px solid transparent; transition: background 0.12s, border-color 0.12s;
 }
 .btn:hover { background: var(--bg-active); }
@@ -46,7 +46,7 @@ kbd {
 .btn.primary:hover { background: var(--accent-strong); }
 .btn.ghost { background: transparent; border-color: var(--border-strong); }
 .btn.danger { color: var(--bad); }
-.btn.big { padding: 10px 22px; font-size: 15px; border-radius: 9px; }
+.btn.big { padding: 10px 22px; font-size: var(--fs-md); border-radius: 9px; }
 .btn[disabled] { opacity: 0.5; pointer-events: none; }
 
 .field {
@@ -70,7 +70,7 @@ textarea.field { resize: vertical; min-height: 64px; }
 
 .tabs-pill { display: inline-flex; gap: 2px; }
 .tabs-pill button {
-  padding: 5px 13px; border-radius: 8px; color: var(--text-muted); font-size: 14px;
+  padding: 5px 13px; border-radius: 8px; color: var(--text-muted); font-size: var(--fs-md);
 }
 .tabs-pill button:hover { color: var(--text); }
 .tabs-pill button.on { background: var(--accent); color: var(--on-accent); box-shadow: 0 1px 4px rgba(150, 60, 30, 0.35); }
@@ -90,9 +90,15 @@ textarea.field { resize: vertical; min-height: 64px; }
 
 .empty {
   display: grid; place-items: center; text-align: center; color: var(--text-muted); padding: 40px 20px;
-  font-family: var(--font-heading); font-size: 18px;
+  font-size: var(--fs-lg);
 }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* Shared page typography (Tasks, Calendar, Study) */
+.page-title { font-family: var(--font-heading); font-size: var(--fs-page); font-weight: 400; line-height: 1.15; margin: 0 0 22px; letter-spacing: -0.005em; }
+.section-title { font-family: var(--font-heading); font-size: var(--fs-section); font-weight: 400; line-height: 1.2; margin: 0 0 14px; }
+.eyebrow { font-family: var(--font-body); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); margin: 0; }
+.numeral { font-family: var(--font-heading); font-weight: 400; }

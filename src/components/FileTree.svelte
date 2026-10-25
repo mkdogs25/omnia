@@ -1,6 +1,6 @@
 <script lang="ts">
   import { app } from '../lib/app.svelte'
-  import { dirname, noteTitle, type Entry, type FolderEntry } from '../lib/vault'
+  import { dirname, docKind, isDoc, noteTitle, type Entry } from '../lib/vault'
   import Icon from './Icon.svelte'
   import Menu, { type MenuItem } from './Menu.svelte'
 
@@ -62,6 +62,7 @@
     if (entry) {
       items.push({ divider: true })
       if (entry.kind === 'file') {
+        if (isDoc(entry.path)) items.push({ label: 'Open and take notes', icon: 'pencil', run: () => { app.openNote(entry.path); void app.ensureCompanion(entry.path) } })
         items.push({ label: 'Open in new tab', icon: 'file', run: () => app.openNote(entry.path, { newTab: true }) })
         items.push({ label: app.isBookmarked(entry.path) ? 'Remove bookmark' : 'Bookmark', icon: 'bookmark', run: () => app.toggleBookmark(entry.path) })
       }
@@ -82,6 +83,7 @@
     dropTarget = null
     const path = e.dataTransfer?.getData('text/omnia-path')
     if (path) void app.moveEntry(path, folder)
+    else if (e.dataTransfer?.files.length) void app.importFiles([...e.dataTransfer.files], folder)
   }
 
   const root = $derived(app.tree)
@@ -140,6 +142,7 @@
           onblur={commitRename} onkeydown={e => { e.stopPropagation(); if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') renaming = null }} />
       {:else}
         <span class="name truncate">{noteTitle(entry.path)}</span>
+        {#if docKind(entry.path)}<span class="ext">{docKind(entry.path)}</span>{/if}
       {/if}
     </div>
   {/if}
@@ -159,7 +162,7 @@
     {#each sorted(root.children) as entry (entry.path)}
       {@render node(entry, 0)}
     {:else}
-      <div class="hint">This folder has no notes yet.<br />Press <kbd>Alt</kbd> <kbd>N</kbd> or use the new note button above.</div>
+      <div class="hint">This folder has no notes yet.<br />Drop in a PDF or Word file to read it, or press <kbd>Alt</kbd> <kbd>N</kbd> or use the new note button above.</div>
     {/each}
   {/if}
 </div>
@@ -182,6 +185,8 @@
   .chev { display: inline-grid; transition: transform 0.12s; }
   .chev.open { transform: rotate(90deg); }
   .name { flex: 1; }
+  .ext { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 1px 6px; border-radius: 5px; background: var(--bg-active); color: var(--text-muted); }
+  .row-item.active .ext { background: rgba(255, 255, 255, 0.25); color: inherit; }
   .rename { flex: 1; min-width: 0; padding: 2px 6px; border-radius: 5px; border: 1px solid var(--accent); background: var(--bg-raised); color: var(--text); outline: none; }
   .hint { padding: 24px 14px; color: var(--text-faint); font-size: 13.5px; line-height: 1.7; }
 </style>

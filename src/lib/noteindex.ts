@@ -1,6 +1,6 @@
 import type { Card } from './cards'
 import { parseNote, WIKILINK_RE, type ParsedNote } from './noteparse'
-import { basename, dirname, noteTitle } from './vault'
+import { basename, dirname, isDoc, noteTitle } from './vault'
 
 export interface NoteRecord {
   path: string
@@ -25,6 +25,8 @@ export interface SearchHit {
 
 export class NoteIndex {
   notes = new Map<string, NoteRecord>()
+  /** Paths of PDF and DOCX files in the vault. */
+  docs = new Set<string>()
   private byName = new Map<string, string[]>()
   private backlinkMap = new Map<string, Backlink[]>()
   private tagMap = new Map<string, string[]>()
@@ -69,6 +71,7 @@ export class NoteIndex {
 
   /** Finds the note a [[link]] points at. Prefers the closest folder when names clash. */
   resolve(target: string, fromPath = ''): string | null {
+    if (isDoc(target)) return this.resolveDoc(target.trim())
     let t = target.trim().replace(/\.md$/i, '')
     if (!t) return null
     if (t.includes('/')) {
@@ -85,6 +88,17 @@ export class NoteIndex {
       const sb = dirname(b) === here ? 0 : 1
       return sa - sb || a.split('/').length - b.split('/').length
     })[0]
+  }
+
+  private resolveDoc(target: string): string | null {
+    const wanted = target.replace(/^\//, '').toLowerCase()
+    let best: string | null = null
+    for (const p of this.docs) {
+      const lower = p.toLowerCase()
+      if (lower === wanted) return p
+      if (lower.endsWith('/' + wanted) || (!wanted.includes('/') && basename(lower) === wanted)) best ??= p
+    }
+    return best
   }
 
   backlinks(path: string): Backlink[] {
@@ -175,7 +189,7 @@ export class NoteIndex {
   findByTitle(query: string, limit = 30): string[] {
     const q = query.toLowerCase().trim()
     const scored: [number, string][] = []
-    for (const path of this.notes.keys()) {
+    for (const path of [...this.notes.keys(), ...this.docs]) {
       const t = noteTitle(path).toLowerCase()
       const p = path.toLowerCase()
       let s = -1

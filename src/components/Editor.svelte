@@ -7,6 +7,8 @@
   import { displayMath, hostFacet, livePreview, readingFacet, type EditorHost } from '../lib/editor/livePreview'
   import { dirname, joinPath } from '../lib/vault'
 
+  let { path }: { path: string | null } = $props()
+
   let container: HTMLDivElement
   let view: EditorView | undefined
   let currentPath: string | null = null
@@ -131,6 +133,7 @@
     void flush()
     if (currentPath) states.set(currentPath, view.state)
     currentPath = path
+    app.editorPath = path
     if (!path) return
     const text = app.index.notes.get(path)?.text ?? ''
     let state = states.get(path)
@@ -203,13 +206,14 @@
   onDestroy(() => {
     void flush()
     app.editor = null
+    app.editorPath = null
     view?.destroy()
     for (const url of blobUrls.values()) URL.revokeObjectURL(url)
   })
 
   $effect(() => {
-    const path = app.activePath
-    untrack(() => switchTo(path))
+    const p = path
+    untrack(() => switchTo(p))
   })
 
   $effect(() => {
