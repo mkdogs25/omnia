@@ -1,6 +1,7 @@
-# Builds Omnia and publishes it to GitHub Pages (https://<user>.github.io/omnia/).
+# Builds Omnia and publishes it to the gh-pages branch, which GitHub Pages serves at
+# https://<user>.github.io/omnia/
 #
-# One-off setup: in the repository go to Settings -> Pages and set Source to "GitHub Actions".
+# One-off setup: Settings -> Pages -> Source: "Deploy from a branch", Branch: gh-pages, folder: / (root).
 name: Deploy to GitHub Pages
 
 on:
@@ -9,16 +10,14 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,17 +32,13 @@ jobs:
         run: npm run check
       - name: Build
         run: npm run build
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Publish to gh-pages
+        run: |
+          touch dist/.nojekyll
+          cd dist
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Deploy ${GITHUB_SHA}"
+          git push --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages

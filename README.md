@@ -77,11 +77,11 @@ Stack: Vite, Svelte 5, TypeScript and CodeMirror 6, with KaTeX for maths. No bac
 
 ## Deploying to GitHub Pages
 
-`.github/workflows/deploy.yml` builds the site and publishes it with GitHub Actions whenever `main` is updated.
+`.github/workflows/deploy.yml` builds the site and publishes it to the `gh-pages` branch whenever `main` is updated.
 
-1. Push this code to the `main` branch (merge the working branch).
-2. In the repository, open **Settings → Pages** and set **Source** to **GitHub Actions** (one-off).
-3. The workflow runs; the site appears at `https://<user>.github.io/omnia/`.
+1. In the repository, open **Settings → Pages**.
+2. Set **Source** to **Deploy from a branch**, then choose branch **gh-pages** and folder **/ (root)**. This is a one-off step.
+3. The site appears at `https://<user>.github.io/omnia/`.
 
 The build uses a relative base path, so it works at any URL.
 
