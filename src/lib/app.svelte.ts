@@ -731,7 +731,7 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
       await this.refresh()
       this.index.rebuild()
       this.bump()
-      this.toast(`Moved "${basename(path)}" to .trash`)
+      this.toast(`Moved "${basename(path)}" to the trash`, { label: 'Undo', run: () => void this.restoreTrash(trashName, path) })
     } catch (e) {
       this.toast(`Could not delete: ${(e as Error).message}`)
     }

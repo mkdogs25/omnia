@@ -54,6 +54,8 @@
 
   function contextMenu(e: MouseEvent, entry: Entry | null) {
     e.preventDefault()
+    // A click on a row must not bubble up to the tree itself, whose own handler would replace this menu with the empty-space one.
+    e.stopPropagation()
     const folder = entry ? (entry.kind === 'folder' ? entry.path : dirname(entry.path)) : ''
     const items: MenuItem[] = [
       { label: 'New note', icon: 'new-note', run: () => app.createNote(folder, 'Untitled', false) },
