@@ -55,10 +55,29 @@ export function weekday(s: ISODate): number {
   return fromISO(s).getDay()
 }
 
-/** Weeks start on Monday, as in the reference screenshots. */
+let weekStartsOn = 1 // 0 = Sunday, 1 = Monday (the default, as in the reference screenshots)
+
+export function setWeekStart(day: 0 | 1) {
+  weekStartsOn = day
+}
+
+export function getWeekStart(): 0 | 1 {
+  return weekStartsOn as 0 | 1
+}
+
+/** Days of the week in display order, e.g. [1,2,3,4,5,6,0] when weeks start on Monday. */
+export function weekdayOrder(): number[] {
+  return weekStartsOn === 1 ? [1, 2, 3, 4, 5, 6, 0] : [0, 1, 2, 3, 4, 5, 6]
+}
+
 export function startOfWeek(s: ISODate): ISODate {
-  const wd = (weekday(s) + 6) % 7
+  const wd = (weekday(s) - weekStartsOn + 7) % 7
   return addDays(s, -wd)
+}
+
+/** Always Monday-based; repeat rules use this so their fortnightly rhythm doesn't change with the display setting. */
+export function mondayOfWeek(s: ISODate): ISODate {
+  return addDays(s, -((weekday(s) + 6) % 7))
 }
 
 export function endOfWeek(s: ISODate): ISODate {

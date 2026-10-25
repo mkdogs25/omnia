@@ -71,6 +71,7 @@
   <h3>Make a card</h3>
   <div class="row tools">
     <button class="btn" onclick={cloze}>Cloze from selection</button>
+    <button class="btn" title="Suggest cards from definitions, highlights, figures and lists" onclick={() => (app.modal = { type: 'autogen', path })}><Icon name="wand" size={14} /> Auto-generate</button>
   </div>
   <form class="quick" onsubmit={e => { e.preventDefault(); addCard() }}>
     <input class="field" placeholder="Front (question)" bind:value={front} />

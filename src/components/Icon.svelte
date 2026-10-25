@@ -46,6 +46,23 @@
     'folder-open': 'M3 18V6a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v2M3 18l2.5-8h15.5l-2.5 8a2 2 0 0 1-2 1.5H5a2 2 0 0 1-2-1.5z',
     file: 'M6 3h8l5 5v13H6zM14 3v5h5',
     timer: 'M10 2h4M12 14l3-3M12 6a8 8 0 1 0 0 16 8 8 0 0 0 0-16z',
+    flag: 'M5 21V4M5 4h11l-2 4 2 4H5',
+    bell: 'M6 9a6 6 0 0 1 12 0c0 6 2 8 2 8H4s2-2 2-8M10 21h4',
+    check: 'M5 12l4 4 10-10',
+    sliders: 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4',
+    copy: 'M9 9h10v11H9zM5 15V4h10',
+    download: 'M12 3v12M7 10l5 5 5-5M4 20h16',
+    upload: 'M12 16V4M7 9l5-5 5 5M4 20h16',
+    home: 'M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10',
+    graph: 'M6 6a2 2 0 1 0 0 .01M18 8a2 2 0 1 0 0 .01M12 18a2 2 0 1 0 0 .01M7.6 7.4l3.4 9M16.6 9.4l-3.6 7.2M8 6.4l8 1.2',
+    maximize: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',
+    inbox2: 'M4 4h16v10H4zM4 14l2 6h12l2-6M9 9h6',
+    history: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2',
+    wand: 'M15 4l5 5L9 20l-5-5zM13 6l5 5M5 3v3M3.5 4.5h3M19 15v3M17.5 16.5h3',
+    warning: 'M12 3l10 18H2zM12 10v5M12 18h.01',
+    palette: 'M12 3a9 9 0 0 0 0 18c1.5 0 2-1 2-2 0-1.5-1-1.5-1-3 0-1.5 1.5-2 3-2h3a2 2 0 0 0 2-2c0-5-4-9-9-9zM7.5 11h.01M10 7h.01M15 7h.01',
+    scan: 'M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16',
+    highlighter: 'M9 14l6-6 3 3-6 6zM9 14l-4 5h5l2-2M15 8l3-3 3 3-3 3',
     undo: 'M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3'
   }
   let { name, size = 18 }: { name: string; size?: number } = $props()

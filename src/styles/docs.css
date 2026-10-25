@@ -18,3 +18,16 @@
 .pdf-page .textLayer .search-hit { background: rgba(244, 196, 48, 0.55); border-radius: 2px; }
 .pdf-dark .pdf-page canvas { filter: invert(0.9) hue-rotate(180deg); }
 .pdf-dark .pdf-page { background: #1e1913; }
+
+/* Text recognised by OCR sits on top of scanned pages exactly like a real text layer: invisible, but selectable. */
+.pdf-page .ocr-layer { position: absolute; inset: 0; overflow: hidden; line-height: 1; z-index: 1; }
+.pdf-page .ocr-layer span { position: absolute; color: transparent; white-space: pre; cursor: text; transform-origin: 0 0; user-select: text; font-family: Helvetica, Arial, sans-serif; }
+.pdf-page .ocr-layer ::selection { background: rgba(217, 92, 58, 0.35); color: transparent; }
+.ocr-review .pdf-page .ocr-layer span.low { outline: 1.5px dashed var(--accent); outline-offset: 0; background: rgba(244, 196, 48, 0.22); }
+.pdf-page .ocr-layer span.sel { outline: 2px solid var(--accent-strong); background: rgba(244, 196, 48, 0.5); }
+
+/* Highlights sit between the page image and its text layer, so selecting text still works through them. */
+.pdf-page .hl-layer { position: absolute; inset: 0; pointer-events: none; }
+.pdf-page .hl { position: absolute; opacity: 0.42; mix-blend-mode: multiply; border-radius: 2px; }
+.pdf-page .hl.has-comment::after { content: ''; position: absolute; right: -4px; top: -4px; width: 9px; height: 9px; border-radius: 50%; background: var(--accent-strong); border: 1.5px solid #fff; }
+.pdf-dark .pdf-page .hl { mix-blend-mode: normal; opacity: 0.35; }

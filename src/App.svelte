@@ -3,6 +3,7 @@
   import { app } from './lib/app.svelte'
   import Shell from './components/Shell.svelte'
   import Welcome from './components/Welcome.svelte'
+  import { applyAppearance } from './lib/appearance'
 
   onMount(() => {
     void app.boot()
@@ -14,7 +15,8 @@
     const apply = () => {
       const dark = app.theme === 'dark' || (app.theme === 'auto' && mq.matches)
       root.dataset.theme = dark ? 'dark' : 'light'
-      document.querySelector('meta[name=theme-color]')?.setAttribute('content', dark ? '#1e1913' : '#fcf5e1')
+      applyAppearance(app.settings, dark, root)
+      document.querySelector('meta[name=theme-color]')?.setAttribute('content', getComputedStyle(root).getPropertyValue('--bg').trim() || (dark ? '#1e1913' : '#fcf5e1'))
     }
     apply()
     mq.addEventListener('change', apply)

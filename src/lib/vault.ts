@@ -97,6 +97,20 @@ export class Vault {
     return { tree: { kind: 'folder', name: this.name, path: '', children }, notes, docs }
   }
 
+  /** Names and kinds of the entries directly inside a folder (hidden folders included). */
+  async list(path: string): Promise<{ name: string; kind: 'file' | 'directory'; size: number; mtime: number }[]> {
+    const dir = await this.dir(path)
+    const out: { name: string; kind: 'file' | 'directory'; size: number; mtime: number }[] = []
+    for await (const [name, handle] of (dir as any).entries() as AsyncIterable<[string, FileSystemHandle]>) {
+      if (handle.kind === 'directory') out.push({ name, kind: 'directory', size: 0, mtime: 0 })
+      else {
+        const f = await (handle as FileSystemFileHandle).getFile()
+        out.push({ name, kind: 'file', size: f.size, mtime: f.lastModified })
+      }
+    }
+    return out
+  }
+
   async readText(path: string): Promise<string> {
     return (await (await this.fileHandle(path)).getFile()).text()
   }
@@ -195,10 +209,23 @@ export class Vault {
     return null
   }
 
-  async readJSON<T>(name: string, fallback: T): Promise<T> {
+  /**
+   * Reads an app data file. A missing file gives the fallback; a file that exists but can't be parsed is
+   * copied aside (so it can be recovered by hand) before the fallback is used, rather than being overwritten.
+   */
+  async readJSON<T>(name: string, fallback: T, onBroken?: () => void): Promise<T> {
+    const path = joinPath(DATA_DIR, name)
+    let text: string
     try {
-      return JSON.parse(await this.readText(joinPath(DATA_DIR, name))) as T
+      text = await this.readText(path)
     } catch {
+      return fallback
+    }
+    try {
+      return JSON.parse(text) as T
+    } catch {
+      try { await this.writeText(`${path}.broken-${Date.now()}`, text) } catch { /* read-only folder */ }
+      onBroken?.()
       return fallback
     }
   }

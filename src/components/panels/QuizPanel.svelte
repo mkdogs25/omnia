@@ -57,6 +57,7 @@
   <button class="btn primary" disabled={!total} onclick={() => (app.modal = { type: 'quiz', scope: { type: 'note', path } })}>
     <Icon name="play" size={14} /> Quiz me on this note
   </button>
+  <button class="btn" onclick={() => (app.modal = { type: 'autogen', path })}><Icon name="wand" size={14} /> Generate questions from this note</button>
   {#if past.length}
     <div class="past" aria-label="Recent scores">
       {#each past as r}

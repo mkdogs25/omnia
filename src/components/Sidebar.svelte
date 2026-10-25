@@ -50,6 +50,7 @@
   {#if app.sidebarTab === 'files'}
     <div class="toolbar">
       <button class="icon-btn" title="New note (Alt+N)" onclick={() => app.createNote(app.currentFolder(), 'Untitled')}><Icon name="new-note" size={20} /></button>
+      <button class="icon-btn" title="New note from template" onclick={() => (app.modal = { type: 'template' })}><Icon name="copy" size={20} /></button>
       <button class="icon-btn" title="New folder" onclick={() => app.createFolder(app.currentFolder())}><Icon name="folder-plus" size={20} /></button>
       <button class="icon-btn" title="Sort order" onclick={e => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); sortMenu = { x: r.left, y: r.bottom + 4 } }}><Icon name="sort" size={20} /></button>
       <button class="icon-btn" title="Collapse all" onclick={collapseAll}><Icon name="layers" size={20} /></button>
@@ -99,8 +100,9 @@
       <Icon name="chevron-down" size={14} />
       <span class="truncate">{app.vault?.name}</span>
     </button>
+    <button class="icon-btn" title="Trash: restore deleted notes" onclick={() => (app.modal = { type: 'trash' })}><Icon name="trash" size={19} /></button>
     <button class="icon-btn" title="Help and shortcuts" onclick={() => (app.modal = { type: 'help' })}><Icon name="help" size={19} /></button>
-    <button class="icon-btn" title="Settings" onclick={() => (app.modal = { type: 'settings' })}><Icon name="settings" size={19} /></button>
+    <button class="icon-btn" title="Settings" onclick={() => app.openSettings()}><Icon name="settings" size={19} /></button>
   </footer>
 </aside>
 

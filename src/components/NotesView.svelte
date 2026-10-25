@@ -16,6 +16,7 @@
   const backlinkCount = $derived(path ? app.backlinks(path).length : 0)
   const title = $derived(path ? noteTitle(path) : '')
   const doc = $derived(!!path && isDoc(path))
+  const crumbs = $derived(path ? path.split('/').slice(0, -1) : [])
 
   async function commitTitle(value: string) {
     if (!path) return
@@ -72,7 +73,7 @@
 </script>
 
 <section class="notes">
-  <div class="tabbar">
+  {#if !app.focusMode}<div class="tabbar">
     <div class="tabs">
       {#each app.tabs as tab (tab.id)}
         <div class="tab" class:active={tab.id === app.activeTabId} role="tab" tabindex="0" aria-selected={tab.id === app.activeTabId}
@@ -89,9 +90,9 @@
       <button class="icon-btn" class:active={app.leftOpen} title="Toggle sidebar" onclick={() => (app.leftOpen = !app.leftOpen)}><Icon name="panel-left" size={19} /></button>
       <button class="icon-btn" class:active={app.rightOpen} title="Toggle study sidebar" onclick={() => (app.rightOpen = !app.rightOpen)}><Icon name="panel-right" size={19} /></button>
     </div>
-  </div>
+  </div>{/if}
 
-  <div class="navbar">
+  {#if !app.focusMode}<div class="navbar">
     <button class="icon-btn" title="Back (Alt+Left)" disabled={!app.canGoBack} onclick={() => app.goBack()}><Icon name="arrow-left" size={19} /></button>
     <button class="icon-btn" title="Forward (Alt+Right)" disabled={!app.canGoForward} onclick={() => app.goForward()}><Icon name="arrow-right" size={19} /></button>
     <span class="grow"></span>
@@ -102,7 +103,7 @@
       <button class="icon-btn" class:active={app.readingMode} title={app.readingMode ? 'Switch to editing' : 'Reading view'} onclick={() => (app.readingMode = !app.readingMode)}><Icon name="book-open" size={19} /></button>
       <button class="icon-btn" title="More options" onclick={openMore}><Icon name="more" size={19} /></button>
     {/if}
-  </div>
+  </div>{/if}
 
   {#if app.conflict && app.conflict === path}
     <div class="banner">
@@ -116,23 +117,29 @@
     <DocView {path} />
   {:else if path}
     <div class="page" style:--editor-width={app.settings.readableWidth ? '52rem' : '100%'}>
+      {#if app.settings.showBreadcrumbs && crumbs.length}
+        <nav class="crumbs" aria-label="Location">
+          {#each crumbs as c, i}{#if i}<span class="sep">/</span>{/if}<span>{c}</span>{/each}
+        </nav>
+      {/if}
       <input class="title" bind:this={titleInput} value={title} spellcheck="false"
         onblur={e => commitTitle(e.currentTarget.value)}
         onkeydown={e => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); app.editor?.focus() } if (e.key === 'Escape') { e.currentTarget.value = title; e.currentTarget.blur() } }} />
       <div class="body"><Editor bind:this={editor} {path} /></div>
     </div>
-    <footer class="status">
+    {#if app.settings.showStatusBar && !app.focusMode}<footer class="status">
       <span class="muted">{backlinkCount} {backlinkCount === 1 ? 'backlink' : 'backlinks'}</span>
       <button class="icon-btn small" title={app.readingMode ? 'Switch to editing' : 'Switch to reading'} onclick={() => (app.readingMode = !app.readingMode)}><Icon name={app.readingMode ? 'pencil' : 'eye'} size={16} /></button>
       <span class="muted">{(rec?.parsed.words ?? 0).toLocaleString('en-GB')} words</span>
       <span class="muted">{(rec?.parsed.chars ?? 0).toLocaleString('en-GB')} characters</span>
-    </footer>
+    </footer>{/if}
   {:else}
     <div class="blank">
       <h2>No note open</h2>
       <div class="actions">
         <button class="btn primary" onclick={() => app.createNote(app.currentFolder(), 'Untitled')}><Icon name="new-note" size={16} /> New note <kbd>Alt N</kbd></button>
         <button class="btn" onclick={() => app.openDaily()}><Icon name="sunrise" size={16} /> Today's note <kbd>Alt D</kbd></button>
+        <button class="btn" onclick={() => (app.modal = { type: 'template' })}><Icon name="copy" size={16} /> From template</button>
         <button class="btn" onclick={() => (app.modal = { type: 'switcher' })}><Icon name="search" size={16} /> Open note <kbd>Ctrl O</kbd></button>
       </div>
     </div>
@@ -146,6 +153,8 @@
 {/if}
 
 <style>
+  .crumbs { display: flex; gap: 6px; font-size: var(--fs-sm); color: var(--text-faint); margin: 0 auto; width: 100%; max-width: var(--editor-width, 52rem); padding: 0 4px 2px; }
+  .crumbs .sep { opacity: 0.6; }
   .notes { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; background: var(--bg); position: relative; }
   .tabbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px 0; min-height: 50px; }
   .tabs { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }

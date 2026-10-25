@@ -175,7 +175,7 @@
   .tree { flex: 1; overflow: auto; padding: 4px 10px 20px; min-height: 0; }
   .tree.drop { background: var(--accent-soft); }
   .row-item {
-    display: flex; align-items: center; gap: 4px; height: 33px; padding-right: 8px; border-radius: 7px;
+    display: flex; align-items: center; gap: 4px; height: var(--row-h, 33px); padding-right: 8px; border-radius: 7px;
     cursor: pointer; font-size: 15px; color: var(--text-muted); user-select: none; margin: 1px 0;
   }
   .row-item:hover { background: var(--bg-hover); color: var(--text); }

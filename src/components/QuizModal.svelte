@@ -1,20 +1,33 @@
 <script lang="ts">
+  import { onDestroy, onMount } from 'svelte'
   import { app } from '../lib/app.svelte'
   import { today } from '../lib/dates'
   import { renderInline } from '../lib/inline'
+  import { generate } from '../lib/autogen'
   import { generateQuestions, isCorrectText, questionsFromNote, shuffle, type QuizQuestion } from '../lib/quiz'
+  import { snapshot } from '../lib/mistakes'
   import { inScope, type Scope } from '../lib/study'
   import { noteTitle } from '../lib/vault'
   import Icon from './Icon.svelte'
   import Modal from './Modal.svelte'
 
-  let { scope }: { scope: Scope } = $props()
+  let { scope, auto = false, preset, title }: { scope: Scope; auto?: boolean; preset?: QuizQuestion[]; title?: string } = $props()
 
   type Phase = 'setup' | 'run' | 'results'
   let phase = $state<Phase>('setup')
-  let source = $state<'both' | 'written' | 'cards'>('both')
+  // svelte-ignore state_referenced_locally
+  let source = $state<'both' | 'written' | 'cards' | 'auto'>(auto ? 'auto' : 'both')
   let mode = $state<'mixed' | 'choice' | 'type'>('mixed')
   let count = $state(10)
+
+  // Exam mode: a countdown, no feedback until the end, and nothing that needs self-marking.
+  let exam = $state(false)
+  let examMin = $state(10)
+  let left = $state(0)
+  let endsAt = 0
+  let started = 0
+  let timer: ReturnType<typeof setInterval> | undefined
+  let usedSeconds = $state(0)
 
   let questions = $state<QuizQuestion[]>([])
   let index = $state(0)
@@ -24,7 +37,7 @@
   let selfKnew = $state<boolean | null>(null)
   let results = $state<{ q: QuizQuestion; ok: boolean; given: string }[]>([])
 
-  const label = $derived(scope.type === 'note' ? noteTitle(scope.path) : scope.type === 'folder' ? scope.path || 'whole folder' : scope.type === 'tag' ? `#${scope.tag}` : 'all notes')
+  const label = $derived(title ? title : scope.type === 'note' ? noteTitle(scope.path) : scope.type === 'folder' ? scope.path || 'whole folder' : scope.type === 'tag' ? `#${scope.tag}` : 'all notes')
 
   const written = $derived.by(() => {
     app.indexVersion
@@ -33,17 +46,34 @@
       if (scope.type === 'note' && rec.path !== scope.path) continue
       if (scope.type === 'folder' && scope.path && !rec.path.startsWith(scope.path + '/')) continue
       if (scope.type === 'tag' && !rec.parsed.tags.includes(scope.tag)) continue
-      out.push(...questionsFromNote(rec.text))
+      out.push(...questionsFromNote(rec.text).map(q => ({ ...q, path: rec.path })))
     }
     return out
   })
   const cards = $derived(app.scopeCards(scope))
-  const available = $derived((source !== 'cards' ? written.length : 0) + (source !== 'written' ? cards.length : 0))
+  // Questions worked out from the notes themselves (definitions, highlights, figures, lists), minus any already written.
+  const autoQs = $derived.by(() => {
+    app.indexVersion
+    const known = new Set(written.map(w => w.id))
+    const out: QuizQuestion[] = []
+    for (const rec of app.index.notes.values()) {
+      if (scope.type === 'note' && rec.path !== scope.path) continue
+      if (scope.type === 'folder' && scope.path && !rec.path.startsWith(scope.path + '/')) continue
+      if (scope.type === 'tag' && !rec.parsed.tags.includes(scope.tag)) continue
+      for (const g of generate(rec.text, rec.path, { existingQuestionIds: known }).questions) out.push({ ...g.q, path: rec.path })
+    }
+    return out
+  })
+  const available = $derived(
+    (source === 'auto' ? autoQs.length : 0) +
+    (source === 'written' || source === 'both' ? written.length : 0) +
+    (source === 'cards' || source === 'both' ? cards.length : 0)
+  )
 
   $effect(() => {
-    if (phase === 'setup') {
-      if (!written.length) source = 'cards'
-      else if (!cards.length) source = 'written'
+    if (phase === 'setup' && !auto) {
+      if (!written.length && source === 'both') source = cards.length ? 'cards' : autoQs.length ? 'auto' : 'cards'
+      else if (!cards.length && source === 'both') source = 'written'
     }
   })
 
@@ -57,13 +87,44 @@
 
   function start() {
     const pool: QuizQuestion[] = []
-    if (source !== 'cards') pool.push(...written)
-    if (source !== 'written') {
+    if (source === 'auto') pool.push(...autoQs)
+    if (source === 'written' || source === 'both') pool.push(...written)
+    if (source === 'cards' || source === 'both') {
       const cardQs = generateQuestions(cards, { mode, count: Math.min(count, cards.length), pool: app.allCards() })
       pool.push(...cardQs)
     }
-    begin(shuffle(pool).slice(0, count))
+    const chosen = shuffle(exam ? pool.filter(p => p.kind !== 'recall') : pool).slice(0, count)
+    begin(chosen)
+    if (exam && chosen.length) startTimer()
   }
+
+  function startTimer() {
+    started = Date.now()
+    endsAt = started + examMin * 60_000
+    left = examMin * 60
+    clearInterval(timer)
+    timer = setInterval(() => {
+      left = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000))
+      if (left === 0) timeUp()
+    }, 500)
+  }
+
+  function timeUp() {
+    clearInterval(timer)
+    if (phase !== 'run') return
+    // Whatever was on screen counts if it was answered; everything after it is unanswered.
+    const answered = q && (q.kind === 'choice' ? picked.length > 0 : typed.trim().length > 0)
+    if (answered) {
+      checked = true
+      results = [...results, { q, ok: isOk, given: q.kind === 'choice' ? picked.map(i => q.options[i].text).join(', ') : typed }]
+    }
+    const from = results.length
+    results = [...results, ...questions.slice(from).map(x => ({ q: x, ok: false, given: '' }))]
+    finish()
+  }
+
+  onDestroy(() => clearInterval(timer))
+  const clock = $derived(`${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`)
 
   function reset() {
     picked = []
@@ -71,6 +132,10 @@
     checked = false
     selfKnew = null
   }
+
+  onMount(() => {
+    if (preset?.length) begin(shuffle(preset))
+  })
 
   const q = $derived(questions[index])
   const correctIdx = $derived(q?.kind === 'choice' ? q.options.map((o, i) => (o.correct ? i : -1)).filter(i => i >= 0) : [])
@@ -85,7 +150,7 @@
 
   function choose(i: number) {
     if (checked) return
-    if (multi) picked = picked.includes(i) ? picked.filter(x => x !== i) : [...picked, i]
+    if (multi || exam) picked = multi ? (picked.includes(i) ? picked.filter(x => x !== i) : [...picked, i]) : [i]
     else {
       picked = [i]
       check()
@@ -98,6 +163,7 @@
   }
 
   function next() {
+    if (exam && !checked) checked = true
     const given = q.kind === 'choice' ? picked.map(i => q.options[i].text).join(', ') : q.kind === 'text' ? typed : selfKnew ? 'I knew it' : 'Not yet'
     results = [...results, { q, ok: isOk, given }]
     if (index + 1 >= questions.length) finish()
@@ -108,10 +174,18 @@
   }
 
   function finish() {
+    clearInterval(timer)
+    if (exam) usedSeconds = Math.min(examMin * 60, Math.round((Date.now() - started) / 1000))
     const correct = results.filter(r => r.ok).length
     const path = scope.type === 'note' ? scope.path : scope.type === 'folder' ? scope.path : scope.type === 'tag' ? `#${scope.tag}` : ''
-    app.recordQuiz({ date: today(), path, total: results.length, correct })
-    for (const r of results) if (!r.ok && r.q.cardId) app.lapseCard(r.q.cardId)
+    if (!preset) app.recordQuiz({ date: today(), path, total: results.length, correct })
+    for (const r of results) {
+      if (r.ok) app.recordCorrect(r.q.id)
+      else {
+        app.recordMistake({ id: r.q.id, source: r.q.cardId ? 'card' : 'quiz', path: r.q.path ?? (scope.type === 'note' ? scope.path : ''), q: snapshot(r.q), given: r.given })
+        if (r.q.cardId) app.lapseCard(r.q.cardId)
+      }
+    }
     phase = 'results'
   }
 
@@ -119,7 +193,8 @@
     if (phase !== 'run' || (e.target as HTMLElement).tagName === 'INPUT' || e.ctrlKey || e.metaKey) return
     if (e.key === 'Enter') {
       e.preventDefault()
-      if (!checked) { if (q.kind !== 'recall' && (q.kind === 'text' ? typed.trim() : picked.length)) check() }
+      if (exam) next()
+      else if (!checked) { if (q.kind !== 'recall' && (q.kind === 'text' ? typed.trim() : picked.length)) check() }
       else if (q.kind !== 'recall' || selfKnew !== null) next()
     } else if (q.kind === 'choice' && /^[1-9]$/.test(e.key) && +e.key <= q.options.length) choose(+e.key - 1)
   }
@@ -138,6 +213,7 @@
         <div class="where muted">Quiz · {label}</div>
         {#if phase === 'run'}<div class="bar" aria-hidden="true"><span style:width="{(index / questions.length) * 100}%"></span></div>{/if}
       </div>
+      {#if phase === 'run' && exam}<span class="clock" class:low={left <= 60} role="timer" aria-label="Time left">{clock}</span>{/if}
       {#if phase === 'run'}<span class="muted count">{index + 1} / {questions.length}</span>{/if}
       <button class="icon-btn" title="Close (Esc)" onclick={() => (app.modal = null)}><Icon name="x" size={18} /></button>
     </header>
@@ -151,9 +227,10 @@
             <button class:on={source === 'both'} disabled={!written.length || !cards.length} onclick={() => (source = 'both')}>Both</button>
             <button class:on={source === 'written'} disabled={!written.length} onclick={() => (source = 'written')}>Written ({written.length})</button>
             <button class:on={source === 'cards'} disabled={!cards.length} onclick={() => (source = 'cards')}>Flashcards ({cards.length})</button>
+            <button class:on={source === 'auto'} disabled={!autoQs.length} title="Worked out from definitions, highlights, figures and lists" onclick={() => (source = 'auto')}>Auto ({autoQs.length})</button>
           </div>
         </div>
-        {#if source !== 'written'}
+        {#if source === 'cards' || source === 'both'}
           <div class="opt">
             <span class="lbl">Flashcard questions</span>
             <div class="tabs-pill">
@@ -164,12 +241,19 @@
           </div>
         {/if}
         <div class="opt">
+          <span class="lbl">Timed exam <span class="faint">(no feedback until the end)</span></span>
+          <div class="examrow">
+            <label class="check"><input type="checkbox" class="checkbox" bind:checked={exam} aria-label="Timed exam mode" /> Exam mode</label>
+            {#if exam}<label class="check">Time limit <input class="field mins" type="number" min="1" max="180" bind:value={examMin} aria-label="Minutes" /> min</label>{/if}
+          </div>
+        </div>
+        <div class="opt">
           <span class="lbl">Number of questions <strong>{Math.min(count, Math.max(available, 1))}</strong></span>
           <input type="range" min="3" max="50" bind:value={count} />
         </div>
       </div>
       {#if !available}
-        <p class="muted">There is nothing to quiz on yet. Add flashcards (<code>Front :: Back</code>) or a <code>quiz</code> block to your notes.</p>
+        <p class="muted">There is nothing to quiz on yet. Add flashcards (<code>Front :: Back</code>) or a <code>quiz</code> block to your notes, or use the Auto tab once your notes have definitions or highlighted terms.</p>
       {/if}
       <div class="row"><span class="grow"></span><button class="btn primary big" disabled={!available} onclick={start}><Icon name="play" size={15} /> Start quiz</button></div>
 
@@ -187,12 +271,14 @@
               </button>
             {/each}
           </div>
-          {#if multi && !checked}<button class="btn primary" disabled={!picked.length} onclick={check}>Check</button>{/if}
+          {#if exam}<div class="row"><span class="grow"></span><button class="btn primary" onclick={next}>{index + 1 >= questions.length ? 'Finish' : 'Next'} <kbd>Enter</kbd></button></div>
+          {:else if multi && !checked}<button class="btn primary" disabled={!picked.length} onclick={check}>Check</button>{/if}
         {:else if q.kind === 'text'}
-          <form class="typed" onsubmit={e => { e.preventDefault(); if (!checked && typed.trim()) check(); else if (checked) next() }}>
+          <form class="typed" onsubmit={e => { e.preventDefault(); if (exam) next(); else if (!checked && typed.trim()) check(); else if (checked) next() }}>
             <!-- svelte-ignore a11y_autofocus -->
             <input class="field" autofocus placeholder="Type your answer" bind:value={typed} disabled={checked} class:good={checked && isOk} class:bad={checked && !isOk} />
-            {#if !checked}<button class="btn primary" type="submit" disabled={!typed.trim()}>Check</button>{/if}
+            {#if exam}<button class="btn primary" type="submit">{index + 1 >= questions.length ? 'Finish' : 'Next'}</button>
+            {:else if !checked}<button class="btn primary" type="submit" disabled={!typed.trim()}>Check</button>{/if}
           </form>
         {:else}
           {#if !checked}<button class="btn primary" onclick={check}>Show answer</button>{/if}
@@ -221,6 +307,7 @@
       <div class="results">
         <h2>{pct >= 80 ? 'Well done' : pct >= 50 ? 'Getting there' : 'Keep practising'}</h2>
         <p class="score">{score} / {results.length} <span class="muted">({pct}%)</span></p>
+        {#if exam}<p class="muted small">Exam finished in {Math.floor(usedSeconds / 60)}:{String(usedSeconds % 60).padStart(2, '0')} of {examMin}:00.{results.some(r => !r.given && !r.ok) ? ' Questions left unanswered count as wrong.' : ''}</p>{/if}
         {#if results.some(r => !r.ok && r.q.cardId)}<p class="muted small">Flashcards you missed have been sent back to your review queue.</p>{/if}
         {#if missed.length}
           <h3>To revisit</h3>
@@ -248,6 +335,11 @@
   .where { font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
   .bar { height: 5px; border-radius: 5px; background: var(--bg-active); overflow: hidden; }
   .bar span { display: block; height: 100%; background: var(--accent); transition: width 0.2s; }
+  .clock { font-variant-numeric: tabular-nums; font-weight: 700; font-size: var(--fs-lg); padding: 2px 12px; border-radius: 99px; background: var(--bg-active); }
+  .clock.low { background: var(--accent); color: var(--on-accent); }
+  .examrow { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .check { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-md); }
+  .mins { width: 72px; padding: 3px 8px; }
   .count { font-variant-numeric: tabular-nums; font-size: 13px; }
   h2 { font-size: 32px; }
   h3 { font-size: 20px; margin-top: 6px; }
@@ -258,7 +350,7 @@
   .tabs-pill button[disabled] { opacity: 0.4; pointer-events: none; }
   input[type='range'] { accent-color: var(--accent); width: 100%; }
   .q { display: grid; gap: 16px; }
-  .prompt { font-family: var(--font-heading); font-size: 24px; line-height: 1.4; }
+  .prompt { font-family: var(--font-heading); font-weight: 700; font-size: 24px; line-height: 1.35; }
   .prompt :global(.blank) { color: var(--accent-strong); background: var(--accent-soft); border-radius: 6px; padding: 0 10px; font-weight: 700; }
   .small { font-size: 13px; margin: 0; }
   .choices { display: grid; gap: 8px; }
@@ -276,7 +368,7 @@
   .feedback.no { background: color-mix(in srgb, var(--bad) 14%, transparent); }
   .ans { font-weight: 600; }
   .expl { font-size: 14px; }
-  .score { font-family: var(--font-heading); font-size: 40px; margin: 0; }
+  .score { font-family: var(--font-heading); font-weight: 700; font-size: 40px; margin: 0; }
   .results ul { padding-left: 18px; display: grid; gap: 10px; margin: 0 0 14px; }
   code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
   kbd { margin-left: 6px; background: rgba(255, 255, 255, 0.2); color: inherit; border-color: transparent; }

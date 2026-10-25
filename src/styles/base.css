@@ -6,7 +6,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-body);
-  font-size: 15px;
+  font-size: var(--fs-md);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
@@ -94,11 +94,16 @@ textarea.field { resize: vertical; min-height: 64px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; animation: none !important; }
+  :root[data-motion='system'] * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }
+:root[data-motion='reduce'] * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+
+/* Keyboard focus must always be visible; stronger in high-contrast mode. */
+:root[data-contrast='high'] :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+:root[data-contrast='high'] .field { border-width: 2px; }
 
 /* Shared page typography (Tasks, Calendar, Study) */
-.page-title { font-family: var(--font-heading); font-size: var(--fs-page); font-weight: 400; line-height: 1.15; margin: 0 0 22px; letter-spacing: -0.005em; }
-.section-title { font-family: var(--font-heading); font-size: var(--fs-section); font-weight: 400; line-height: 1.2; margin: 0 0 14px; }
+.page-title { font-family: var(--font-heading); font-size: var(--fs-page); font-weight: 700; line-height: 1.15; margin: 0 0 22px; letter-spacing: -0.005em; }
+.section-title { font-family: var(--font-heading); font-size: var(--fs-section); font-weight: 700; line-height: 1.2; margin: 0 0 14px; }
 .eyebrow { font-family: var(--font-body); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); margin: 0; }
-.numeral { font-family: var(--font-heading); font-weight: 400; }
+.numeral { font-family: var(--font-heading); font-weight: 700; }

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { app } from '../../lib/app.svelte'
+  import { COMMON_KEYS, DIFFICULTY_OPTIONS, getProperty, readProperties, removeProperty, setProperty, STATUS_OPTIONS } from '../../lib/frontmatter'
   import { dirname, noteTitle } from '../../lib/vault'
   import Icon from '../Icon.svelte'
 
@@ -24,11 +25,67 @@
     return app.index.unlinkedMentions(path, 8)
   })
 
+  const entries = $derived(readProperties(rec?.text ?? ''))
+  const extra = $derived(entries.filter(p => !COMMON_KEYS.includes(p.key.toLowerCase()) && !['tags', 'tag', 'aliases'].includes(p.key.toLowerCase())))
+  const valueOf = (k: string) => getProperty(rec?.text ?? '', k)
+  let newKey = $state('')
+  let newValue = $state('')
+
+  const setProp = (key: string, value: string) => app.transformNote(path, t => setProperty(t, key, value))
+  const dropProp = (key: string) => app.transformNote(path, t => removeProperty(t, key))
+  function addProp() {
+    const k = newKey.trim().replace(/[:\n]/g, '')
+    if (!k || !newValue.trim()) return
+    void setProp(k, newValue)
+    newKey = ''
+    newValue = ''
+  }
+
   function goto(line: number) {
     app.editor?.scrollToLine(line)
     app.editor?.focus()
   }
 </script>
+
+<section>
+  <h3>Properties</h3>
+  <div class="props">
+    <label><span>Subject</span><input class="field" value={valueOf('subject')} onchange={e => setProp('subject', e.currentTarget.value)} /></label>
+    <label><span>Topic</span><input class="field" value={valueOf('topic')} onchange={e => setProp('topic', e.currentTarget.value)} /></label>
+    <label><span>Status</span>
+      <select class="field" value={valueOf('status')} onchange={e => setProp('status', e.currentTarget.value)}>
+        <option value="">–</option>
+        {#each STATUS_OPTIONS as o}<option value={o}>{o}</option>{/each}
+        {#if valueOf('status') && !STATUS_OPTIONS.includes(valueOf('status'))}<option value={valueOf('status')}>{valueOf('status')}</option>{/if}
+      </select>
+    </label>
+    <label><span>Difficulty</span>
+      <select class="field" value={valueOf('difficulty')} onchange={e => setProp('difficulty', e.currentTarget.value)}>
+        <option value="">–</option>
+        {#each DIFFICULTY_OPTIONS as o}<option value={o}>{o}</option>{/each}
+      </select>
+    </label>
+    {#each extra as p (p.key)}
+      <label><span class="k" title={p.key}>{p.key}</span>
+        <span class="with-x"><input class="field" value={p.value} onchange={e => setProp(p.key, e.currentTarget.value)} />
+          <button class="icon-btn" title="Remove {p.key}" aria-label="Remove {p.key}" onclick={() => dropProp(p.key)}><Icon name="x" size={13} /></button></span>
+      </label>
+    {/each}
+    <form class="add" onsubmit={e => { e.preventDefault(); addProp() }}>
+      <input class="field" placeholder="New property" bind:value={newKey} aria-label="New property name" />
+      <input class="field" placeholder="Value" bind:value={newValue} aria-label="New property value" />
+      <button class="btn" type="submit" disabled={!newKey.trim() || !newValue.trim()}>Add</button>
+    </form>
+  </div>
+</section>
+
+<section>
+  <h3>History</h3>
+  <div class="hrow">
+    <button class="btn" onclick={() => (app.modal = { type: 'history', path })}><Icon name="history" size={14} /> Browse versions</button>
+    <button class="btn" onclick={() => void app.saveVersion(path)}>Save one now</button>
+  </div>
+</section>
 
 <section>
   <h3>Outline</h3>
@@ -88,6 +145,13 @@
   .card:hover { background: var(--bg-active); }
   .t { font-weight: 600; font-size: 14px; }
   .ctx { font-size: 12.5px; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .props { display: grid; gap: 6px; }
+  .props label { display: grid; grid-template-columns: 76px 1fr; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); }
+  .props .k { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .props .field { padding: 4px 8px; font-size: 13.5px; }
+  .with-x { display: flex; align-items: center; gap: 2px; }
+  .hrow { display: flex; gap: 6px; flex-wrap: wrap; }
+  .add { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; margin-top: 4px; }
   .tags { display: flex; flex-wrap: wrap; gap: 6px; }
   .tags .pill { cursor: pointer; }
   p { margin: 4px 8px; font-size: 13px; }

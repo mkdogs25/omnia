@@ -43,7 +43,7 @@
     padding: 40px 44px; box-shadow: var(--shadow);
   }
   h1 { font-size: 54px; margin-bottom: 8px; }
-  .lede { font-family: var(--font-heading); font-size: 20px; line-height: 1.4; color: var(--text-muted); margin: 0 0 22px; }
+  .lede { font-size: var(--fs-xl); line-height: 1.45; color: var(--text-muted); margin: 0 0 22px; }
   p { line-height: 1.6; }
   .actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 22px 0; }
   .notice { background: var(--accent-soft); border-radius: 10px; padding: 14px 18px; }

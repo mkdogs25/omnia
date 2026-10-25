@@ -61,7 +61,7 @@
 
   <div class="foot muted">
     <span>{pomodoro.minutesToday} min focused today</span>
-    <button class="link" onclick={() => (app.modal = { type: 'settings' })}>Durations</button>
+    <button class="link" onclick={() => app.openSettings('pomodoro')}>Durations</button>
   </div>
 </div>
 

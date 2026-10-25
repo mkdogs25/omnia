@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { app } from '../lib/app.svelte'
-  import { clozeHidden, clozeRevealed, type Card } from '../lib/cards'
+  import { clozeAnswers, clozeHidden, clozeRevealed, type Card } from '../lib/cards'
+  import type { Mistake } from '../lib/mistakes'
   import { renderInline } from '../lib/inline'
   import { GRADE_LABELS, previewIntervals, type Grade } from '../lib/sr'
   import { shuffle } from '../lib/quiz'
@@ -18,7 +19,7 @@
   let cram = $state(false)
   let finished = $state(false)
   let stats = $state([0, 0, 0, 0])
-  let undo = $state<{ snapshot: StudyData; card: Card; grade: Grade } | null>(null)
+  let undo = $state<{ snapshot: StudyData; mistakes: Mistake[]; card: Card; grade: Grade } | null>(null)
 
   const card = $derived(queue[0])
   const done = $derived(stats.reduce((a, b) => a + b, 0))
@@ -52,8 +53,19 @@
     if (!card || !revealed) return
     const current = card
     const snapshot = app.study
+    const mistakes = app.mistakes
+    if (g === 0) {
+      app.recordMistake({
+        id: current.id, source: 'card', path: current.path,
+        q: {
+          kind: 'recall', options: [],
+          prompt: current.kind === 'cloze' ? clozeHidden(current.front, current.clozeIndex!) : current.front,
+          answers: [current.kind === 'cloze' ? clozeAnswers(current.front, current.clozeIndex!).join(' / ') : current.back]
+        }
+      })
+    } else if (g >= 2) app.recordCorrect(current.id)
     if (!cram) {
-      const next = app.gradeCard(current.id, g)
+      const next = app.gradeCard(current.id, g, Date.now(), current.path)
       // A card still in learning comes back later in this session.
       if (next.stage === 'learning' || g === 0) queue = [...queue.slice(1), current]
       else queue = queue.slice(1)
@@ -61,7 +73,7 @@
       queue = g === 0 ? [...queue.slice(1), current] : queue.slice(1)
     }
     stats = stats.map((n, i) => (i === g ? n + 1 : n))
-    undo = cram ? null : { snapshot, card: current, grade: g }
+    undo = cram ? null : { snapshot, mistakes, card: current, grade: g }
     revealed = false
     if (!queue.length) finished = true
   }
@@ -69,6 +81,7 @@
   function undoLast() {
     if (!undo) return
     app.restoreStudy(undo.snapshot)
+    app.setMistakes(undo.mistakes)
     queue = [undo.card, ...queue.filter(c => c.id !== undo!.card.id)]
     stats = stats.map((n, i) => (i === undo!.grade ? n - 1 : n))
     undo = null
@@ -172,8 +185,8 @@
   .bar span { display: block; height: 100%; background: var(--accent); transition: width 0.2s; }
   .count { font-variant-numeric: tabular-nums; font-size: 13px; }
   .card { min-height: 220px; padding: 34px 36px; border-radius: 16px; background: var(--bg); border: 1px solid var(--border); display: grid; align-content: center; gap: 18px; text-align: center; }
-  .face { font-family: var(--font-heading); font-size: 26px; line-height: 1.45; overflow-wrap: anywhere; }
-  .face.back { color: var(--text); }
+  .face { font-family: var(--font-heading); font-weight: 700; font-size: 26px; line-height: 1.4; overflow-wrap: anywhere; }
+  .face.back { font-family: var(--font-body); font-weight: 400; font-size: 20px; line-height: 1.55; color: var(--text); }
   .card hr { width: 60%; border: 0; border-top: 1px solid var(--border-strong); margin: 0 auto; }
   .face :global(.blank) { color: var(--accent-strong); background: var(--accent-soft); border-radius: 6px; padding: 0 10px; font-weight: 700; }
   .face :global(.answer) { color: var(--accent-strong); font-weight: 700; border-bottom: 2px solid var(--accent); }
@@ -198,7 +211,7 @@
   .link { color: var(--link); }
   .done { display: grid; gap: 14px; text-align: center; padding: 40px 0 10px; }
   .done h2 { font-size: 34px; }
-  .done .big { font-family: var(--font-heading); font-size: 22px; margin: 0; color: var(--accent-strong); }
+  .done .big { font-family: var(--font-heading); font-weight: 700; font-size: 22px; margin: 0; color: var(--accent-strong); }
   .breakdown { display: flex; justify-content: center; gap: 28px; margin: 6px 0; }
   .breakdown div { display: grid; }
   .breakdown strong { font-size: 24px; font-family: var(--font-heading); }

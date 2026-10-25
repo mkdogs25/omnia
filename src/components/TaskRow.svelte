@@ -1,163 +1,122 @@
 <script lang="ts">
   import { app } from '../lib/app.svelte'
-  import { formatLong, formatTime, today, weekday, WEEKDAYS, type ISODate } from '../lib/dates'
-  import { describeRecurrence, type Recurrence } from '../lib/recurrence'
-  import type { Task } from '../lib/tasks'
+  import { formatShort, formatTime, today, type ISODate } from '../lib/dates'
+  import { describeRecurrence } from '../lib/recurrence'
+  import { deadlineStatus, isRecurring, quickDates, reschedule, subtaskProgress, type Task } from '../lib/tasks'
   import { noteTitle } from '../lib/vault'
   import Icon from './Icon.svelte'
+  import Menu, { type MenuItem } from './Menu.svelte'
+  import TaskEditor from './TaskEditor.svelte'
 
   let { task, date, done, showDate = true, label, compact = false }: {
     task: Task
     /** The occurrence date this row stands for. */
     date?: ISODate
     done: boolean
+    /** Show the planned day on the right (leave off under a day heading, where it would repeat). */
     showDate?: boolean
-    /** Overrides the right-hand label. */
+    /** Replaces the planned-day text. */
     label?: string
     compact?: boolean
   } = $props()
 
   let open = $state(false)
+  let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null)
 
-  const recurring = $derived(!!task.recur && !!task.due)
-  const rightLabel = $derived(
-    label ?? (recurring ? describeRecurrence(task.recur!, task.due) : task.due ? formatLong(task.due) : '')
-  )
-  const overdue = $derived(!recurring && !done && !!task.due && task.due < today())
-
-  type RepeatKind = 'none' | 'day' | 'week' | 'fortnight' | 'month' | 'year' | 'custom'
-  const repeatKind = $derived.by<RepeatKind>(() => {
-    const r = task.recur
-    if (!r) return 'none'
-    const plain = !r.weekdays || (r.weekdays.length === 1 && task.due && r.weekdays[0] === weekday(task.due))
-    if (r.every === 1 && r.unit === 'day') return 'day'
-    if (r.every === 1 && r.unit === 'week' && plain) return 'week'
-    if (r.every === 2 && r.unit === 'week' && plain) return 'fortnight'
-    if (r.every === 1 && r.unit === 'month') return 'month'
-    if (r.every === 1 && r.unit === 'year') return 'year'
-    return 'custom'
-  })
-
-  function setRepeat(kind: RepeatKind) {
-    const due = task.due ?? today()
-    const map: Record<string, Recurrence | undefined> = {
-      none: undefined,
-      day: { unit: 'day', every: 1 },
-      week: { unit: 'week', every: 1, weekdays: [weekday(due)] },
-      fortnight: { unit: 'week', every: 2, weekdays: [weekday(due)] },
-      month: { unit: 'month', every: 1 },
-      year: { unit: 'year', every: 1 },
-      custom: task.recur ?? { unit: 'week', every: 1, weekdays: [weekday(due)] }
-    }
-    app.updateTask(task.id, { recur: map[kind], due: kind === 'none' ? task.due : due })
-  }
-
-  function toggleWeekday(d: number) {
-    const r = task.recur
-    if (!r) return
-    const cur = r.weekdays ?? [weekday(task.due ?? today())]
-    const next = cur.includes(d) ? cur.filter(x => x !== d) : [...cur, d]
-    if (next.length) app.updateTask(task.id, { recur: { ...r, unit: 'week', weekdays: next.sort() } })
-  }
-
-  function openLinkedNote() {
-    if (task.note) app.openNote(task.note)
-  }
+  const now = $derived(today())
+  const recurring = $derived(isRecurring(task))
+  const progress = $derived(subtaskProgress(task))
+  const deadline = $derived(task.deadline && !recurring && !done ? deadlineStatus(task.deadline, now, app.settings.deadlineLeadDays) : null)
+  const late = $derived(!recurring && !done && !!(task.due ?? task.deadline) && (task.due ?? task.deadline)! < now)
+  const dateText = $derived(label ?? (recurring ? describeRecurrence(task.recur!, task.due) : task.due ? formatShort(task.due) : ''))
 
   function remove() {
-    const copy = { ...task }
+    const copy = structuredClone($state.snapshot(task)) as Task
     app.removeTask(task.id)
-    app.toast(`Deleted "${copy.title}"`, { label: 'Undo', run: () => { app.tasks = [...app.tasks, copy]; app.updateTask(copy.id, {}) } })
+    app.toast(`Deleted “${copy.title}”`, { label: 'Undo', run: () => app.restoreTask(copy) })
+  }
+
+  function moveMenu(e: MouseEvent) {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const items: MenuItem[] = quickDates(now).map(q => ({ label: q.label, icon: 'calendar', run: () => app.replaceTask(reschedule(task, q.date)) }))
+    items.push({ divider: true }, { label: 'Pick a date…', icon: 'pencil', run: () => (open = true) })
+    if (task.due) items.push({ label: 'Remove the date', icon: 'x', run: () => app.replaceTask(reschedule(task, null)) })
+    menu = { x: r.left, y: r.bottom + 4, items }
+  }
+
+  function moreMenu(e: MouseEvent) {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    menu = {
+      x: r.right - 200, y: r.bottom + 4,
+      items: [
+        { label: 'Edit', icon: 'pencil', run: () => (open = true) },
+        { label: 'Duplicate', icon: 'copy', run: () => app.duplicateTask(task.id) },
+        ...(task.note ? [{ label: 'Open linked note', icon: 'file', run: () => app.openNote(task.note!) }] : []),
+        { divider: true },
+        { label: 'Delete', icon: 'trash', danger: true, run: remove }
+      ]
+    }
   }
 </script>
 
 <div class="task" class:open class:compact class:done>
-  <div class="line">
+  <div class="line" role="group">
     <input type="checkbox" class="checkbox" checked={done} aria-label="Complete {task.title}" onchange={() => app.toggleTask(task.id, date)} />
-    <button class="title" onclick={() => (open = !open)}>
+    <button class="title" onclick={() => (open = !open)} aria-expanded={open}>
       <span class="text" class:struck={done}>{task.title}</span>
-      {#if task.notes}<span class="ico" title="Has notes"><Icon name="lines" size={15} /></span>{/if}
-      {#if task.note}<span class="ico" title="Linked note"><Icon name="link" size={14} /></span>{/if}
-      {#if recurring}<span class="ico" title="Repeats"><Icon name="repeat" size={14} /></span>{/if}
-      {#if task.pomodoros}<span class="ico" title="{task.pomodoros} focus session{task.pomodoros === 1 ? '' : 's'}"><Icon name="timer" size={14} />{task.pomodoros}</span>{/if}
     </button>
-    {#if task.time}<span class="when">{formatTime(task.time)}</span>{/if}
-    {#if showDate && rightLabel}<span class="date" class:overdue>{rightLabel}</span>{/if}
+
+    <span class="meta">
+      {#if progress.total}
+        <span class="chip sub" title="{progress.done} of {progress.total} subtasks done">
+          <span class="bar"><span style:width="{(progress.done / progress.total) * 100}%"></span></span>{progress.done}/{progress.total}
+        </span>
+      {/if}
+      {#if task.notes}<span class="ico" title="Has notes"><Icon name="lines" size={14} /></span>{/if}
+      {#if task.note}<span class="ico" title="Linked to {noteTitle(task.note)}"><Icon name="link" size={14} /></span>{/if}
+      {#if task.remind}<span class="ico" title="Reminder set"><Icon name="bell" size={14} /></span>{/if}
+      {#if task.pomodoros}<span class="ico" title="{task.pomodoros} focus session{task.pomodoros === 1 ? '' : 's'}"><Icon name="timer" size={14} />{task.pomodoros}</span>{/if}
+      {#if recurring}<span class="ico" title="Repeats"><Icon name="repeat" size={14} /></span>{/if}
+      {#if deadline}
+        <span class="chip deadline {deadline.tone}" title="Deadline {formatShort(task.deadline!)}"><Icon name="flag" size={12} />{deadline.label}</span>
+      {/if}
+      {#if task.time}<span class="when">{formatTime(task.time)}</span>{/if}
+      {#if showDate && dateText}<span class="date" class:late>{dateText}</span>{/if}
+    </span>
+
+    {#if !compact}
+      <span class="actions">
+        {#if !recurring && !done}<button class="icon-btn" title="Reschedule" onclick={moveMenu}><Icon name="calendar" size={16} /></button>{/if}
+        <button class="icon-btn" title="More" onclick={moreMenu}><Icon name="more" size={16} /></button>
+      </span>
+    {/if}
   </div>
 
-  {#if open}
-    <div class="editor">
-      <input class="field" value={task.title} aria-label="Title" onchange={e => e.currentTarget.value.trim() && app.updateTask(task.id, { title: e.currentTarget.value.trim() })} />
-      <textarea class="field" placeholder="Notes" rows="3" value={task.notes ?? ''} onchange={e => app.updateTask(task.id, { notes: e.currentTarget.value || undefined })}></textarea>
-      <div class="grid">
-        <label><span>Date</span>
-          <input class="field" type="date" value={task.due ?? ''} onchange={e => app.updateTask(task.id, { due: e.currentTarget.value || undefined, recur: e.currentTarget.value ? task.recur : undefined })} /></label>
-        <label><span>Time</span>
-          <input class="field" type="time" value={task.time ?? ''} onchange={e => app.updateTask(task.id, { time: e.currentTarget.value || undefined })} /></label>
-        <label><span>Repeat</span>
-          <select class="field" value={repeatKind} disabled={!task.due} onchange={e => setRepeat(e.currentTarget.value as RepeatKind)}>
-            <option value="none">Never</option>
-            <option value="day">Every day</option>
-            <option value="week">Every week</option>
-            <option value="fortnight">Every fortnight</option>
-            <option value="month">Every month</option>
-            <option value="year">Every year</option>
-            <option value="custom">Custom…</option>
-          </select></label>
-        <label><span>Linked note</span>
-          <select class="field" value={task.note ?? ''} onchange={e => app.updateTask(task.id, { note: e.currentTarget.value || undefined })}>
-            <option value="">None</option>
-            {#each app.noteList().sort((a, b) => a.path.localeCompare(b.path)) as n (n.path)}<option value={n.path}>{noteTitle(n.path)}</option>{/each}
-          </select></label>
-      </div>
-      {#if repeatKind === 'custom' && task.recur}
-        <div class="custom">
-          <span>Every</span>
-          <input class="field num" type="number" min="1" value={task.recur.every} onchange={e => app.updateTask(task.id, { recur: { ...task.recur!, every: Math.max(1, +e.currentTarget.value || 1) } })} />
-          <select class="field unit" value={task.recur.unit} onchange={e => app.updateTask(task.id, { recur: { ...task.recur!, unit: e.currentTarget.value as Recurrence['unit'] } })}>
-            <option value="day">days</option><option value="week">weeks</option><option value="month">months</option><option value="year">years</option>
-          </select>
-          {#if task.recur.unit === 'week'}
-            <div class="days">
-              {#each [1, 2, 3, 4, 5, 6, 0] as d}
-                <button class="chip" class:on={(task.recur.weekdays ?? [weekday(task.due ?? today())]).includes(d)} onclick={() => toggleWeekday(d)}>{WEEKDAYS[d].slice(0, 3)}</button>
-              {/each}
-            </div>
-          {/if}
-        </div>
-      {/if}
-      <div class="row actions">
-        {#if task.note}<button class="btn" onclick={openLinkedNote}><Icon name="file" size={15} /> Open note</button>{/if}
-        <span class="grow"></span>
-        <button class="btn danger" onclick={remove}><Icon name="trash" size={15} /> Delete</button>
-        <button class="btn primary" onclick={() => (open = false)}>Done</button>
-      </div>
-    </div>
-  {/if}
+  {#if open}<TaskEditor {task} onclose={() => (open = false)} ondelete={remove} />{/if}
 </div>
+
+{#if menu}<Menu x={menu.x} y={menu.y} items={menu.items} onclose={() => (menu = null)} />{/if}
 
 <style>
   .task { border-radius: 10px; }
-  .line { display: flex; align-items: center; gap: 14px; min-height: 40px; padding: 4px 6px; border-radius: 8px; }
+  .line { display: flex; align-items: center; gap: 14px; min-height: var(--row-min, 40px); padding: 3px 8px 3px 6px; border-radius: 9px; }
   .line:hover { background: var(--bg-hover); }
-  .title { display: flex; align-items: center; gap: 10px; text-align: left; font-size: var(--fs-lg); min-width: 0; }
-  .text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .title { flex: 1 1 auto; min-width: 0; text-align: left; font-size: var(--fs-lg); padding: 4px 0; }
+  .text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .text.struck { text-decoration: line-through; color: var(--text-faint); }
-  .ico { color: var(--text-muted); display: inline-flex; align-items: center; gap: 3px; font-size: var(--fs-xs); }
-  .when { color: var(--text-muted); font-size: var(--fs-md); }
-  .date { color: var(--text-muted); font-size: var(--fs-md); white-space: nowrap; }
-  .date.overdue { color: var(--bad); }
+  .meta { display: flex; align-items: center; gap: 10px; flex: none; color: var(--text-muted); font-size: var(--fs-sm); }
+  .ico { display: inline-flex; align-items: center; gap: 3px; font-size: var(--fs-xs); }
+  .when, .date { white-space: nowrap; }
+  .date.late { color: var(--bad); }
+  .chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px; border-radius: 99px; font-size: var(--fs-xs); background: var(--bg-active); white-space: nowrap; }
+  .chip.sub .bar { width: 26px; height: 4px; border-radius: 4px; background: var(--border-strong); overflow: hidden; }
+  .chip.sub .bar span { display: block; height: 100%; background: var(--accent); }
+  .deadline { font-weight: 600; }
+  .deadline.later { background: var(--bg-active); color: var(--text-muted); font-weight: 500; }
+  .deadline.soon { background: color-mix(in srgb, var(--warn) 22%, transparent); color: color-mix(in srgb, var(--warn) 70%, var(--text)); }
+  .deadline.today, .deadline.overdue { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+  .actions { display: flex; flex: none; opacity: 0; transition: opacity 0.12s; }
+  .line:hover .actions, .line:focus-within .actions, .open .actions { opacity: 1; }
   .compact .line { min-height: 34px; gap: 10px; }
   .compact .title { font-size: var(--fs-md); }
-  .compact .date { font-size: var(--fs-xs); }
-  .editor { margin: 4px 0 12px 32px; padding: 14px; display: grid; gap: 10px; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 12px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-  label { display: grid; gap: 3px; font-size: var(--fs-xs); color: var(--text-muted); }
-  .custom { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--fs-md); }
-  .num { width: 70px; }
-  .unit { width: 110px; }
-  .days { display: flex; gap: 4px; flex-wrap: wrap; }
-  .chip { padding: 3px 9px; border-radius: 99px; border: 1px solid var(--border-strong); font-size: var(--fs-xs); }
-  .chip.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
-  .actions { margin-top: 2px; }
 </style>

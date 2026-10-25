@@ -41,7 +41,7 @@
 </aside>
 
 <style>
-  .right { width: 340px; flex: none; display: flex; flex-direction: column; background: var(--bg-side); border-left: 1px solid var(--border); min-height: 0; }
+  .right { width: var(--right-w, 340px); flex: none; display: flex; flex-direction: column; background: var(--bg-side); border-left: 1px solid var(--border); min-height: 0; }
   header { display: flex; align-items: center; gap: 4px; padding: 10px 10px 6px 12px; }
   .tabs { display: flex; gap: 2px; flex: 1; }
   .tabs button { display: inline-flex; align-items: center; gap: 5px; padding: 6px 9px; border-radius: 8px; color: var(--text-muted); font-size: 13px; }

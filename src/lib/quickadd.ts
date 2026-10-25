@@ -3,7 +3,10 @@ import { nextOccurrence, type Recurrence } from './recurrence'
 
 export interface QuickAdd {
   title: string
+  /** When to do it. */
   due?: ISODate
+  /** The hard deadline ("by friday", "due 31 oct"). */
+  deadline?: ISODate
   recur?: Recurrence
 }
 
@@ -20,15 +23,73 @@ function cut(text: string, re: RegExp): [RegExpMatchArray | null, string] {
   return [m, (text.slice(0, m.index) + ' ' + text.slice((m.index ?? 0) + m[0].length)).replace(/\s+/g, ' ').trim()]
 }
 
+function nextWeekday(from: ISODate, wd: number, forceNext: boolean): ISODate {
+  let delta = (wd - weekday(from) + 7) % 7
+  if (delta === 0 && forceNext) delta = 7
+  return addDays(from, delta)
+}
+
 /**
- * Pulls a due date and a repeat rule out of free text such as
- * "Weekly revision every saturday" or "Hand in essay on 31 oct".
+ * Finds one date expression in `text` and returns it with the text left over. Understands ISO dates, today,
+ * tomorrow, "in 3 days", "next week", weekdays ("friday", "next friday") and "31 oct" / "oct 31".
+ * When `anchored` the expression must start the text (used right after "by", "due", …).
+ */
+export function extractDate(text: string, now: ISODate, anchored = false, allowBareWeekday = true): { date?: ISODate; rest: string } {
+  const a = anchored ? '^\\s*' : '\\b'
+  const attempt = (re: RegExp, make: (m: RegExpMatchArray) => ISODate | undefined): { date: ISODate; rest: string } | null => {
+    const [m, rest] = cut(text, re)
+    if (!m) return null
+    const date = make(m)
+    return date ? { date, rest } : null
+  }
+  const monthDay = (dayStr: string, monStr: string): ISODate => {
+    const mon = MONTHS.findIndex(x => x.slice(0, 3).toLowerCase() === monStr.slice(0, 3).toLowerCase())
+    const nowDate = fromISO(now)
+    let cand = new Date(nowDate.getFullYear(), mon, parseInt(dayStr, 10), 12)
+    if (toISO(cand) < now) cand = new Date(nowDate.getFullYear() + 1, mon, parseInt(dayStr, 10), 12)
+    return toISO(cand)
+  }
+
+  const found =
+    attempt(new RegExp(`${a}(\\d{4}-\\d{2}-\\d{2})\\b`), m => m[1]) ??
+    attempt(new RegExp(`${a}(today|tonight|tomorrow)\\b`, 'i'), m => (m[1].toLowerCase() === 'tomorrow' ? addDays(now, 1) : now)) ??
+    attempt(new RegExp(`${a}in\\s+(\\d+)\\s+(day|week|month)s?\\b`, 'i'), m => {
+      const n = parseInt(m[1], 10)
+      const u = m[2].toLowerCase()
+      return addDays(now, u === 'day' ? n : u === 'week' ? n * 7 : n * 30)
+    }) ??
+    attempt(new RegExp(`${a}next\\s+week\\b`, 'i'), () => addDays(now, 7)) ??
+    attempt(new RegExp(`${a}(?:on\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+(${MONTH_RE})[a-z]*\\b`, 'i'), m => monthDay(m[1], m[2])) ??
+    attempt(new RegExp(`${a}(?:on\\s+)?(${MONTH_RE})[a-z]*\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b`, 'i'), m => monthDay(m[2], m[1])) ??
+    (allowBareWeekday
+      ? attempt(new RegExp(`${a}(?:on\\s+|next\\s+)?(${DAY_RE})\\b`, 'i'), m => nextWeekday(now, DAY_NAMES[m[1].toLowerCase()], /next/i.test(m[0])))
+      : null)
+  return found ? { date: found.date, rest: found.rest } : { rest: text }
+}
+
+/**
+ * Pulls a due date, a deadline and a repeat rule out of free text such as
+ * "Weekly revision every saturday", "Hand in essay on 31 oct" or "Lab report friday by 2 nov".
+ * A deadline is introduced by by / due / deadline / before; a bare date is the day to do the task.
  */
 export function parseQuickAdd(input: string, now: ISODate): QuickAdd {
   let text = input.trim()
   let due: ISODate | undefined
+  let deadline: ISODate | undefined
   let recur: Recurrence | undefined
   let m: RegExpMatchArray | null
+
+  // Deadline: a keyword followed by a date, e.g. "by friday", "due 2026-11-03", "deadline 31 oct".
+  const kw = text.match(/\b(?:by|due(?:\s+on)?|deadline(?:\s+is)?|before)\s+/i)
+  if (kw && kw.index !== undefined) {
+    const before = text.slice(0, kw.index)
+    const after = text.slice(kw.index + kw[0].length)
+    const got = extractDate(after, now, true)
+    if (got.date) {
+      deadline = got.date
+      text = `${before} ${got.rest}`.replace(/\s+/g, ' ').trim()
+    }
+  }
 
   // Repeat rules
   ;[m, text] = cut(text, new RegExp(`\\bevery\\s+((?:${DAY_RE})(?:\\s*(?:,|and|&)\\s*(?:${DAY_RE}))*)\\b`, 'i'))
@@ -61,39 +122,11 @@ export function parseQuickAdd(input: string, now: ISODate): QuickAdd {
     }
   }
 
-  // Due dates
-  ;[m, text] = cut(text, /\b(\d{4}-\d{2}-\d{2})\b/)
-  if (m) due = m[1]
-  if (!due) {
-    ;[m, text] = cut(text, /\b(today|tonight|tomorrow)\b/i)
-    if (m) due = m[1].toLowerCase() === 'tomorrow' ? addDays(now, 1) : now
-  }
-  if (!due) {
-    ;[m, text] = cut(text, /\bin\s+(\d+)\s+(day|week|month)s?\b/i)
-    if (m) {
-      const n = parseInt(m[1], 10)
-      due = addDays(now, m[2].toLowerCase() === 'day' ? n : m[2].toLowerCase() === 'week' ? n * 7 : n * 30)
-    }
-  }
-  if (!due) {
-    ;[m, text] = cut(text, /\bnext\s+week\b/i)
-    if (m) due = addDays(now, 7)
-  }
-  if (!due) {
-    ;[m, text] = cut(text, new RegExp(`\\b(?:on\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+(${MONTH_RE})[a-z]*\\b`, 'i'))
-    if (!m) [m, text] = cut(text, new RegExp(`\\b(?:on\\s+)?(${MONTH_RE})[a-z]*\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b`, 'i'))
-    if (m) {
-      const [dayStr, monStr] = /^\d/.test(m[1]) ? [m[1], m[2]] : [m[2], m[1]]
-      const mon = MONTHS.findIndex(x => x.slice(0, 3).toLowerCase() === monStr.toLowerCase())
-      const nowDate = fromISO(now)
-      let cand = new Date(nowDate.getFullYear(), mon, parseInt(dayStr, 10), 12)
-      if (toISO(cand) < now) cand = new Date(nowDate.getFullYear() + 1, mon, parseInt(dayStr, 10), 12)
-      due = toISO(cand)
-    }
-  }
-  if (!due && !recur) {
-    ;[m, text] = cut(text, new RegExp(`\\b(?:on\\s+|next\\s+)?(${DAY_RE})\\b`, 'i'))
-    if (m) due = nextWeekday(now, DAY_NAMES[m[1].toLowerCase()], /next/i.test(m[0]))
+  // Due date. A weekday on its own doesn't count when a repeat rule already names one.
+  const got = extractDate(text, now, false, !recur)
+  if (got.date) {
+    due = got.date
+    text = got.rest
   }
 
   if (recur && !due) due = nextOccurrence(now, { ...recur }, now) ?? now
@@ -102,13 +135,8 @@ export function parseQuickAdd(input: string, now: ISODate): QuickAdd {
     // Anchor on the first matching weekday so the first instance is a real occurrence.
     due = nextOccurrence(due, recur, due) ?? due
   }
+  if (recur) deadline = undefined // a repeating task has no single deadline
 
   text = text.replace(/\s+(on|at|by|due)$/i, '').trim()
-  return { title: text || input.trim(), due, recur }
-}
-
-function nextWeekday(from: ISODate, wd: number, forceNext: boolean): ISODate {
-  let delta = (wd - weekday(from) + 7) % 7
-  if (delta === 0 && forceNext) delta = 7
-  return addDays(from, delta)
+  return { title: text || input.trim(), due, deadline, recur }
 }

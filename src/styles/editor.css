@@ -2,7 +2,7 @@
 
 .editor .cm-editor { height: auto; background: transparent; outline: none; font-family: var(--font-body); }
 .editor .cm-editor.cm-focused { outline: none; }
-.editor .cm-scroller { font-family: var(--font-body); line-height: 1.7; overflow: visible; padding: 0 0 40vh; }
+.editor .cm-scroller { font-family: var(--font-body); line-height: var(--editor-line, 1.7); overflow: visible; padding: 0 0 40vh; }
 .editor .cm-content {
   font-size: var(--editor-size, 17px);
   max-width: var(--editor-width, 46rem);

@@ -1,3 +1,5 @@
+import { addVersion, HISTORY_DIR, historyFileName, normaliseHistory, shouldSnapshot, type HistoryFile, type Version } from './history'
+import { normaliseMistakes, recordHit, recordMiss, type Mistake, type MissInput } from './mistakes'
 import { untrack } from 'svelte'
 import { addDays, today, type ISODate } from './dates'
 import {
@@ -10,43 +12,31 @@ import {
   dueCards, emptyStudy, inScope, sessionQueue, type QuizResult, type Scope, type StudyData
 } from './study'
 import { nextRevision, schedule, type Grade, type Rating } from './sr'
-import { shuffle } from './quiz'
+import { shuffle, type QuizQuestion } from './quiz'
+import { DEFAULT_SETTINGS, normaliseSettings, type Settings } from './settings'
 import type { Card } from './cards'
 
-export type View = 'notes' | 'tasks' | 'calendar' | 'study'
+export type View = 'home' | 'notes' | 'tasks' | 'calendar' | 'study' | 'settings'
 export type SidebarTab = 'files' | 'search' | 'bookmarks'
 export type RightTab = 'info' | 'cards' | 'quiz' | 'revise'
 export type Theme = 'light' | 'dark' | 'auto'
 
-export interface Settings {
-  dailyFolder: string
-  bookmarks: string[]
-  newPerDay: number
-  fontSize: number
-  readableWidth: boolean
-  spellcheck: boolean
-  focusMin: number
-  shortMin: number
-  longMin: number
-  longEvery: number
-  pomoAutoStart: boolean
-  pomoSound: boolean
-}
-
-const DEFAULT_SETTINGS: Settings = {
-  dailyFolder: 'Daily', bookmarks: [], newPerDay: 20, fontSize: 18, readableWidth: true, spellcheck: true,
-  focusMin: 25, shortMin: 5, longMin: 15, longEvery: 4, pomoAutoStart: false, pomoSound: true
-}
+export type { Settings } from './settings'
 
 export interface Tab { id: string; path: string }
 
 export type Modal =
   | { type: 'switcher' }
   | { type: 'palette' }
-  | { type: 'settings' }
   | { type: 'help' }
+  | { type: 'capture' }
+  | { type: 'graph' }
   | { type: 'review'; scope: Scope }
-  | { type: 'quiz'; scope: Scope }
+  | { type: 'quiz'; scope: Scope; auto?: boolean; preset?: QuizQuestion[]; title?: string }
+  | { type: 'autogen'; path: string }
+  | { type: 'template' }
+  | { type: 'history'; path: string }
+  | { type: 'trash' }
 
 export interface Toast { id: number; text: string; action?: { label: string; run: () => void } }
 
@@ -56,6 +46,8 @@ export interface EditorApi {
   getSelection(): string
   replaceSelection(text: string): void
   appendText(text: string): void
+  /** Writes any unsaved edits to disk now. */
+  flush(): Promise<void>
   replaceAll(text: string): void
   scrollToLine(line: number): void
   focus(): void
@@ -93,15 +85,21 @@ class AppState {
   readingMode = $state(false)
   modal = $state<Modal | null>(null)
   pomodoroOpen = $state(false)
+  /** Hides every panel so only the note is on screen. */
+  focusMode = $state(false)
+  /** Pre-fills the settings search box (e.g. when opened from the notification centre). */
+  settingsQuery = $state('')
   toasts = $state<Toast[]>([])
   searchQuery = $state('')
   expanded = $state<Record<string, boolean>>({})
 
   // Persisted data
-  settings = $state<Settings>({ ...DEFAULT_SETTINGS })
+  settings = $state<Settings>(normaliseSettings(undefined))
   tasks = $state<Task[]>([])
   events = $state<CalEvent[]>([])
   study = $state<StudyData>(emptyStudy())
+  mistakes = $state<Mistake[]>([])
+  studyTab = $state<'overview' | 'errors' | 'insights'>('overview')
   theme = $state<Theme>('auto')
 
   // Editor bridge
@@ -117,6 +115,11 @@ class AppState {
   /** The note the editor currently has open (it may be a document's companion note). */
   editorPath = $state<string | null>(null)
   dirty = new Set<string>()
+  /** Cursor and scroll position per note, so leaving the Notes view and coming back lands you in the same place. */
+  noteView: Record<string, { anchor: number; scroll: number }> = {}
+  /** Notes with a write in flight; the folder rescan must not mistake our own save for an outside edit. */
+  private inFlight = new Set<string>()
+  private saveChain = new Map<string, Promise<void>>()
 
   private toastId = 0
   private refreshing = false
@@ -125,6 +128,7 @@ class AppState {
     tasks: debounce(() => this.write('tasks.json', this.tasks), 300),
     events: debounce(() => this.write('events.json', this.events), 300),
     study: debounce(() => this.write('study.json', this.study), 500),
+    mistakes: debounce(() => this.write('mistakes.json', this.mistakes), 500),
     settings: debounce(() => this.write('settings.json', this.settings), 300)
   }
 
@@ -189,19 +193,22 @@ class AppState {
     try {
       await vault.mkdir('.omnia')
     } catch { /* read-only folder: data won't persist */ }
-    const [settings, tasks, events, study] = await Promise.all([
-      vault.readJSON<Partial<Settings>>('settings.json', {}),
-      vault.readJSON<Task[]>('tasks.json', []),
-      vault.readJSON<CalEvent[]>('events.json', []),
-      vault.readJSON<StudyData>('study.json', emptyStudy())
+    const [settings, tasks, events, study, mistakes] = await Promise.all([
+      vault.readJSON<Partial<Settings>>('settings.json', {}, () => this.toast('settings.json was unreadable; a copy was kept in .omnia')),
+      vault.readJSON<Task[]>('tasks.json', [], () => this.toast('tasks.json was unreadable; a copy was kept in .omnia')),
+      vault.readJSON<CalEvent[]>('events.json', [], () => this.toast('events.json was unreadable; a copy was kept in .omnia')),
+      vault.readJSON<StudyData>('study.json', emptyStudy(), () => this.toast('study.json was unreadable; a copy was kept in .omnia')),
+      vault.readJSON<unknown>('mistakes.json', [], () => this.toast('mistakes.json was unreadable; a copy was kept in .omnia'))
     ])
-    this.settings = { ...DEFAULT_SETTINGS, ...settings }
+    this.settings = normaliseSettings(settings)
     this.tasks = tasks
     this.events = events
     this.study = { ...emptyStudy(), ...study }
+    this.mistakes = normaliseMistakes(mistakes)
     await this.refresh(true)
     if (!this.index.notes.size) await this.createWelcomeNote()
     this.restoreSession()
+    this.view = this.settings.startView
     if (!this.tabs.length) {
       const latest = [...this.index.notes.values()].sort((a, b) => b.mtime - a.mtime)[0]
       if (latest) this.openNote(latest.path)
@@ -259,17 +266,20 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
       this.index.docs = docPaths
       const seen = new Set([...notes.map(n => n.path), ...docPaths])
       for (const p of [...this.index.notes.keys()]) if (!seen.has(p)) this.index.delete(p)
-      const stale = notes.filter(n => this.index.notes.get(n.path)?.mtime !== n.mtime)
+      const stale = notes.filter(n => !this.inFlight.has(n.path) && this.index.notes.get(n.path)?.mtime !== n.mtime)
       if (initial && stale.length) this.indexing = { done: 0, total: stale.length }
       let next = 0
       const worker = async () => {
         while (next < stale.length) {
           const entry = stale[next++]
           const text = await vault.readText(entry.path)
+          if (this.inFlight.has(entry.path)) continue // a save started while we were reading; its result wins
+          const previous = this.index.notes.get(entry.path)
           this.index.set(entry.path, entry.mtime, text)
           if (this.indexing) this.indexing = { done: this.indexing.done + 1, total: this.indexing.total }
-          const open = this.activeTab?.path === entry.path
-          if (!initial && open) this.noteChangedOnDisk(entry.path, text)
+          const open = this.activeTab?.path === entry.path || this.editorPath === entry.path
+          // Only a real difference in content counts as an outside edit (a changed timestamp alone does not).
+          if (!initial && open && previous && previous.text !== text) this.noteChangedOnDisk(entry.path, text)
         }
       }
       await Promise.all(Array.from({ length: 6 }, worker))
@@ -287,6 +297,8 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
   }
 
   private noteChangedOnDisk(path: string, text: string) {
+    // The editor already shows exactly this text: nothing to reconcile.
+    if (this.editor && this.editorPath === path && this.editor.getText() === text) return
     if (this.dirty.has(path)) this.conflict = path
     else this.externalChange = { path, text, n: (this.externalChange?.n ?? 0) + 1 }
   }
@@ -335,6 +347,22 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
     }
     const current = this.index.notes.get(path)?.text ?? ''
     const next = current + (current && !current.endsWith('\n') ? '\n' : '') + text
+    await this.saveNote(path, next)
+    this.index.rebuild()
+    this.bump()
+  }
+
+  /** Rewrites a note: through the editor if it is open there (so undo works), otherwise on disk. */
+  async transformNote(path: string, fn: (text: string) => string) {
+    if (this.editor && this.editorPath === path) {
+      const before = this.editor.getText()
+      const after = fn(before)
+      if (after !== before) this.editor.replaceAll(after)
+      return
+    }
+    const current = this.index.notes.get(path)?.text ?? ''
+    const next = fn(current)
+    if (next === current) return
     await this.saveNote(path, next)
     this.index.rebuild()
     this.bump()
@@ -398,12 +426,25 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
     } else {
       this.tabs = this.tabs.map(t => (t.id === this.activeTabId ? { ...t, path } : t))
     }
+    this.touchRecent(path)
     if (opts.push !== false) {
       this.history = [...this.history.slice(0, this.historyPos + 1), path]
       this.historyPos = this.history.length - 1
       this.historyVersion++
     }
     this.saveSession()
+  }
+
+  private touchRecent(path: string) {
+    if (this.settings.recent[0] === path) return
+    this.settings = { ...this.settings, recent: [path, ...this.settings.recent.filter(p => p !== path)].slice(0, 12) }
+    this.persistSoon.settings()
+  }
+
+  /** Recently opened notes that still exist. */
+  recentNotes(limit = 8): string[] {
+    this.indexVersion
+    return this.settings.recent.filter(p => this.index.notes.has(p) || this.index.docs.has(p)).slice(0, limit)
   }
 
   newTab() {
@@ -532,20 +573,118 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
     await this.refresh()
   }
 
+  /** Saves are chained per note so they always land in the order they were made. */
   async saveNote(path: string, text: string) {
-    if (!this.vault) return
-    try {
-      const mtime = await this.vault.writeText(path, text)
-      this.index.set(path, mtime, text)
-      this.rebuildSoon()
-    } catch (e) {
-      this.toast(`Could not save "${noteTitle(path)}": ${(e as Error).message}`)
+    const vault = this.vault
+    if (!vault) return
+    this.inFlight.add(path)
+    const run = (this.saveChain.get(path) ?? Promise.resolve()).then(async () => {
+      try {
+        const mtime = await vault.writeText(path, text)
+        this.index.set(path, mtime, text)
+        this.rebuildSoon()
+        if (isNote(path)) void this.snapshotMaybe(path, text)
+      } catch (e) {
+        this.toast(`Could not save "${noteTitle(path)}": ${(e as Error).message}`)
+      }
+    })
+    this.saveChain.set(path, run)
+    await run
+    if (this.saveChain.get(path) === run) {
+      this.saveChain.delete(path)
+      this.inFlight.delete(path)
     }
+  }
+
+  // ---------------------------------------------------------------- version history
+
+  private lastSnap = new Map<string, Version | null>()
+  private snapping = new Set<string>()
+
+  private async readHistory(path: string): Promise<HistoryFile> {
+    try {
+      return normaliseHistory(JSON.parse(await this.vault!.readText(joinPath(HISTORY_DIR, historyFileName(path)))), path)
+    } catch {
+      return normaliseHistory(null, path)
+    }
+  }
+
+  private async writeHistory(h: HistoryFile) {
+    const vault = this.vault
+    if (!vault) return
+    try {
+      await vault.mkdir(HISTORY_DIR)
+      await vault.writeText(joinPath(HISTORY_DIR, historyFileName(h.path)), JSON.stringify(h))
+      this.lastSnap.set(h.path, h.versions.at(-1) ?? null)
+    } catch { /* read-only folder: history simply isn't kept */ }
+  }
+
+  /** Keeps a copy of the note if it has been a while since the last one. */
+  private async snapshotMaybe(path: string, text: string) {
+    if (this.snapping.has(path)) return
+    this.snapping.add(path)
+    try {
+      let last = this.lastSnap.get(path)
+      if (last === undefined) {
+        last = (await this.readHistory(path)).versions.at(-1) ?? null
+        this.lastSnap.set(path, last)
+      }
+      if (!shouldSnapshot(last ?? undefined, text, Date.now())) return
+      const h = await this.readHistory(path)
+      h.versions = addVersion(h.versions, { t: Date.now(), text })
+      await this.writeHistory(h)
+    } finally {
+      this.snapping.delete(path)
+    }
+  }
+
+  async versionsOf(path: string): Promise<Version[]> {
+    return (await this.readHistory(path)).versions
+  }
+
+  /** Saves the note as it is now as a named version. */
+  async saveVersion(path: string, label?: string) {
+    const text = this.editor && this.editorPath === path ? this.editor.getText() : this.index.notes.get(path)?.text
+    if (text === undefined) return
+    const h = await this.readHistory(path)
+    if (h.versions.at(-1)?.text === text && !label) return this.toast('That is already the latest version')
+    h.versions = addVersion(h.versions, { t: Date.now(), text, label: label ?? 'Saved by you' })
+    await this.writeHistory(h)
+    this.toast('Version saved')
+  }
+
+  /** Puts an earlier version back, keeping the current text as a version first so nothing is lost. */
+  async restoreVersion(path: string, version: Version) {
+    const current = this.editor && this.editorPath === path ? this.editor.getText() : this.index.notes.get(path)?.text ?? ''
+    if (current !== version.text) {
+      const h = await this.readHistory(path)
+      h.versions = addVersion(h.versions, { t: Date.now(), text: current, label: 'Before restore' })
+      await this.writeHistory(h)
+    }
+    await this.transformNote(path, () => version.text)
+    this.toast('Restored the earlier version', { label: 'Undo', run: () => void this.transformNote(path, () => current) })
+  }
+
+  private async moveHistory(from: string, to: string) {
+    const vault = this.vault
+    if (!vault || from === to) return
+    const h = await this.readHistory(from)
+    if (!h.versions.length) return
+    await this.writeHistory({ ...h, path: to })
+    this.lastSnap.delete(from)
+    try { await vault.remove(joinPath(HISTORY_DIR, historyFileName(from))) } catch { /* already gone */ }
+  }
+
+  /** Unsaved edits must reach the old path before a note is renamed, moved or deleted, or the old file would reappear. */
+  private async settleEditor() {
+    await this.editor?.flush()
+    await Promise.all([...this.saveChain.values()])
   }
 
   async renameEntry(path: string, newName: string) {
     const vault = this.vault
     if (!vault) return
+    await this.settleEditor()
     const isNoteFile = isNote(path)
     const clean = newName.trim().replace(/[\\/:*?"<>|]/g, '-')
     if (!clean) return
@@ -565,6 +704,7 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
 
   async moveEntry(path: string, folder: string) {
     if (dirname(path) === folder || folder === path || folder.startsWith(path + '/')) return
+    await this.settleEditor()
     const to = joinPath(folder, basename(path))
     try {
       await this.vault?.move(path, to)
@@ -581,9 +721,12 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
   async deleteEntry(path: string) {
     const vault = this.vault
     if (!vault) return
+    await this.settleEditor()
     try {
       const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-      await vault.move(path, joinPath('.trash', `${stamp}-${basename(path)}`))
+      const trashName = `${stamp}-${basename(path)}`
+      await vault.move(path, joinPath('.trash', trashName))
+      void this.recordTrash(trashName, path)
       for (const t of this.tabs.filter(t => t.path === path || t.path.startsWith(path + '/'))) this.closeTab(t.id, true)
       await this.refresh()
       this.index.rebuild()
@@ -592,6 +735,69 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
     } catch (e) {
       this.toast(`Could not delete: ${(e as Error).message}`)
     }
+  }
+
+  // ---------------------------------------------------------------- trash
+
+  private async recordTrash(name: string, original: string) {
+    try {
+      const map = await this.vault!.readJSON<Record<string, string>>('trash.json', {})
+      map[name] = original
+      await this.vault!.writeJSON('trash.json', map)
+    } catch { /* restoring will fall back to the top folder */ }
+  }
+
+  async trashItems(): Promise<{ name: string; original: string; title: string; deleted: number; kind: 'file' | 'directory'; size: number }[]> {
+    const vault = this.vault
+    if (!vault) return []
+    let entries: Awaited<ReturnType<typeof vault.list>> = []
+    try { entries = await vault.list('.trash') } catch { return [] }
+    const map = await vault.readJSON<Record<string, string>>('trash.json', {})
+    return entries.map(e => {
+      const m = e.name.match(/^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-\d{3}Z-(.*)$/)
+      const title = m ? m[5] : e.name
+      const deleted = m ? Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}Z`) : e.mtime
+      return { name: e.name, original: map[e.name] ?? title, title, deleted, kind: e.kind, size: e.size }
+    }).sort((a, b) => b.deleted - a.deleted)
+  }
+
+  async restoreTrash(name: string, original: string): Promise<string | null> {
+    const vault = this.vault
+    if (!vault) return null
+    try {
+      const isFolder = !/\.[A-Za-z0-9]+$/.test(original)
+      let target = original
+      if (await vault.exists(target)) {
+        const stem = isFolder ? original : original.replace(/\.[^./]+$/, '')
+        const ext = isFolder ? '' : original.slice(stem.length)
+        for (let n = 1; await vault.exists(target); n++) target = `${stem} (restored${n > 1 ? ` ${n}` : ''})${ext}`
+      }
+      const parent = dirname(target)
+      if (parent) await vault.mkdir(parent)
+      await vault.move(joinPath('.trash', name), target)
+      await this.refresh()
+      this.index.rebuild()
+      this.bump()
+      this.toast(`Restored “${basename(target)}”`, isNote(target) || isDoc(target) ? { label: 'Open', run: () => this.openNote(target) } : undefined)
+      return target
+    } catch (e) {
+      this.toast(`Could not restore: ${(e as Error).message}`)
+      return null
+    }
+  }
+
+  async purgeTrash(name?: string) {
+    const vault = this.vault
+    if (!vault) return
+    const items = name ? [name] : (await this.trashItems()).map(i => i.name)
+    for (const n of items) {
+      try { await vault.remove(joinPath('.trash', n)) } catch { /* already gone */ }
+    }
+    try {
+      const map = await vault.readJSON<Record<string, string>>('trash.json', {})
+      for (const n of items) delete map[n]
+      await vault.writeJSON('trash.json', map)
+    } catch { /* ignore */ }
   }
 
   private async rewriteLinks(oldTitle: string, newTitle: string, renamedTo: string) {
@@ -608,10 +814,18 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
   }
 
   private remapPaths(from: string, to: string) {
+    const moved = [...this.index.notes.keys()].filter(k => k === from || k.startsWith(from + '/'))
+    for (const old of moved) void this.moveHistory(old, to + old.slice(from.length))
     const map = (p: string) => (p === from ? to : p.startsWith(from + '/') ? to + p.slice(from.length) : p)
     this.tabs = this.tabs.map(t => ({ ...t, path: map(t.path) }))
     this.history = this.history.map(map)
     this.settings.bookmarks = this.settings.bookmarks.map(map)
+    this.settings.recent = this.settings.recent.map(map)
+    this.mistakes = this.mistakes.map(m => ({ ...m, path: map(m.path) }))
+    const noteStats: StudyData['notes'] = {}
+    for (const [p, v] of Object.entries(this.study.notes ?? {})) noteStats[map(p)] = v
+    this.study.notes = noteStats
+    this.persistSoon.mistakes()
     const revs: StudyData['revisions'] = {}
     for (const [p, r] of Object.entries(this.study.revisions)) revs[map(p)] = r
     this.study.revisions = revs
@@ -619,6 +833,45 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
     this.persistSoon.settings()
     this.persistSoon.study()
     this.saveSession()
+  }
+
+  // ---------------------------------------------------------------- templates
+
+  /** Copies a note into the templates folder. */
+  async saveAsTemplate(path: string) {
+    const text = this.editor && this.editorPath === path ? this.editor.getText() : this.index.notes.get(path)?.text
+    if (text === undefined) return
+    const folder = this.settings.templatesFolder.trim() || 'Templates'
+    const title = noteTitle(path)
+    const made = await this.createNote(folder, title, false, text.replace(new RegExp(`^(# )${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'), '$1{{title}}'))
+    if (made) this.toast(`Saved as a template in ${folder}`)
+  }
+
+  // ---------------------------------------------------------------- quick capture
+
+  /** The note quick capture adds to, created on first use. */
+  async inboxPath(): Promise<string | null> {
+    const stem = (this.settings.inboxNote.trim() || 'Inbox').replace(/\.md$/i, '')
+    const path = `${stem}.md`
+    if (this.index.notes.has(path)) return path
+    return this.createNote(dirname(stem), basename(stem), false, `# ${basename(stem)}\n\n`)
+  }
+
+  /** Adds a thought (or a flashcard line) to the inbox note. */
+  async captureToInbox(text: string, kind: 'note' | 'card' = 'note') {
+    const path = await this.inboxPath()
+    if (!path) return null
+    const body = text.trim()
+    if (!body) return null
+    const lines = body.split('\n')
+    const current = this.editor && this.editorPath === path ? this.editor.getText() : this.index.notes.get(path)?.text ?? ''
+    const last = current.trimEnd().split('\n').pop() ?? ''
+    const isBullet = /^\s*[-*+]\s/.test(last)
+    const block = kind === 'card' ? `${body}\n` : `- ${lines[0]}${lines.slice(1).map(l => `\n  ${l}`).join('')}\n`
+    // Blank lines keep cards and bullets from running into each other.
+    const gap = !current.trim() ? '' : kind === 'card' ? (current.endsWith('\n\n') ? '' : current.endsWith('\n') ? '\n' : '\n\n') : isBullet ? (current.endsWith('\n') ? '' : '\n') : (current.endsWith('\n\n') ? '' : current.endsWith('\n') ? '\n' : '\n\n')
+    await this.appendToNote(path, gap + block)
+    return path
   }
 
   // ---------------------------------------------------------------- daily notes and bookmarks
@@ -677,6 +930,41 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
     this.persistSoon.tasks()
   }
 
+  /** Puts back a task that was deleted (used by "Undo"). */
+  restoreTask(task: Task) {
+    if (this.tasks.some(t => t.id === task.id)) return
+    this.tasks = [...this.tasks, task]
+    this.persistSoon.tasks()
+  }
+
+  replaceTask(task: Task) {
+    this.tasks = this.tasks.map(t => (t.id === task.id ? task : t))
+    this.persistSoon.tasks()
+  }
+
+  duplicateTask(id: string) {
+    const t = this.tasks.find(x => x.id === id)
+    if (!t) return
+    const copy: Task = { ...structuredClone($state.snapshot(t)) as Task, id: uid(), title: `${t.title} (copy)`, done: false, doneAt: undefined, completions: undefined, created: today() }
+    this.tasks = [...this.tasks, copy]
+    this.persistSoon.tasks()
+  }
+
+  /** Removes all finished one-off tasks and returns them so the caller can offer "Undo". */
+  clearCompleted(): Task[] {
+    const removed = this.tasks.filter(t => !t.recur && t.done)
+    this.tasks = this.tasks.filter(t => t.recur || !t.done)
+    this.persistSoon.tasks()
+    return removed
+  }
+
+  /** Moves every overdue one-off task to a new planned day. */
+  rescheduleOverdue(to: ISODate) {
+    const now = today()
+    this.tasks = this.tasks.map(t => (!t.recur && !t.done && (t.due ?? t.deadline ?? '9999') < now ? { ...t, due: to } : t))
+    this.persistSoon.tasks()
+  }
+
   addEvent(partial: Partial<CalEvent> & { title: string; date: ISODate }): CalEvent {
     const ev: CalEvent = { id: uid(), ...partial }
     this.events = [...this.events, ev]
@@ -723,7 +1011,7 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
     }
   }
 
-  gradeCard(cardId: string, grade: Grade, now = Date.now()) {
+  gradeCard(cardId: string, grade: Grade, now = Date.now(), path?: string) {
     const prev = this.study.cards[cardId]
     const next = schedule(prev, grade, now)
     const date = today()
@@ -734,7 +1022,10 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
       log: {
         ...this.study.log,
         [date]: { reviews: log.reviews + 1, correct: log.correct + (grade >= 2 ? 1 : 0), newCards: log.newCards + (prev ? 0 : 1) }
-      }
+      },
+      notes: path
+        ? { ...this.study.notes, [path]: { reviews: (this.study.notes[path]?.reviews ?? 0) + 1, correct: (this.study.notes[path]?.correct ?? 0) + (grade >= 2 ? 1 : 0) } }
+        : this.study.notes
     }
     this.persistSoon.study()
     return next
@@ -746,6 +1037,26 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
     if (!prev) return
     this.study = { ...this.study, cards: { ...this.study.cards, [cardId]: schedule(prev, 0, now) } }
     this.persistSoon.study()
+  }
+
+  // ---------------------------------------------------------------- error log
+
+  recordMistake(input: MissInput) {
+    this.mistakes = recordMiss(this.mistakes, input, today())
+    this.persistSoon.mistakes()
+  }
+
+  /** A right answer: moves an open mistake towards resolved. */
+  recordCorrect(id: string) {
+    const next = recordHit(this.mistakes, id, today())
+    if (next === this.mistakes) return
+    this.mistakes = next
+    this.persistSoon.mistakes()
+  }
+
+  setMistakes(next: Mistake[]) {
+    this.mistakes = next
+    this.persistSoon.mistakes()
   }
 
   /** Restores a previous snapshot of study data (used by "undo" in review). */
@@ -788,6 +1099,20 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
 
   // ---------------------------------------------------------------- settings, theme, toasts
 
+  openSettings(query = '') {
+    this.settingsQuery = query
+    this.view = 'settings'
+  }
+
+  /** Puts every setting back to its default (the folder's notes and data are untouched). */
+  resetSettings(keep: Array<keyof Settings> = ['bookmarks', 'dailyFolder', 'recent']) {
+    const fresh = normaliseSettings(undefined)
+    const kept: Partial<Settings> = {}
+    for (const k of keep) (kept as Record<string, unknown>)[k] = this.settings[k]
+    this.settings = { ...fresh, ...kept }
+    this.persistSoon.settings()
+  }
+
   updateSettings(patch: Partial<Settings>) {
     this.settings = { ...this.settings, ...patch }
     this.persistSoon.settings()
@@ -818,6 +1143,7 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
       this.write('tasks.json', untrack(() => this.tasks)),
       this.write('events.json', untrack(() => this.events)),
       this.write('study.json', untrack(() => this.study)),
+      this.write('mistakes.json', untrack(() => this.mistakes)),
       this.write('settings.json', untrack(() => this.settings))
     ])
   }

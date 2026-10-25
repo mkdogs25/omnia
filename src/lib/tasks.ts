@@ -1,12 +1,29 @@
-import { addDays, type ISODate } from './dates'
+import { addDays, diffDays, type ISODate } from './dates'
 import { occurrencesBetween, type Recurrence } from './recurrence'
+
+export interface Subtask {
+  id: string
+  title: string
+  done: boolean
+}
+
+/** "Remind me N days before, at this time." Counts from the deadline if there is one, otherwise the planned day. */
+export interface Reminder {
+  daysBefore: number
+  /** "HH:MM" 24-hour. */
+  time: string
+}
 
 export interface Task {
   id: string
   title: string
   notes?: string
-  /** Due date; for recurring tasks this is the first occurrence. */
+  /** The day to do it; for recurring tasks this is the first occurrence. */
   due?: ISODate
+  /** The hard deadline, separate from the day you plan to work on it. */
+  deadline?: ISODate
+  subtasks?: Subtask[]
+  remind?: Reminder
   time?: string
   recur?: Recurrence
   done: boolean
@@ -24,6 +41,8 @@ export interface CalEvent {
   id: string
   title: string
   date: ISODate
+  /** Minutes before the start to send a reminder. */
+  remindMin?: number
   /** "HH:MM" 24-hour. */
   start?: string
   end?: string
@@ -50,15 +69,16 @@ export function isRecurring(t: Task): t is Task & { due: ISODate; recur: Recurre
 export function itemsInRange(tasks: Task[], from: ISODate, to: ISODate): TaskItem[] {
   const out: TaskItem[] = []
   for (const task of tasks) {
-    if (!task.due) continue
     if (isRecurring(task)) {
       const done = new Set(task.completions ?? [])
       for (const date of occurrencesBetween(task.due, task.recur, from, to)) {
         out.push({ task, date, done: done.has(date), recurring: true })
       }
-    } else if (task.due >= from && task.due <= to) {
-      out.push({ task, date: task.due, done: task.done, recurring: false })
+      continue
     }
+    // A task with only a deadline shows up on that day.
+    const date = displayDate(task)
+    if (date && date >= from && date <= to) out.push({ task, date, done: task.done, recurring: false })
   }
   return out.sort(compareItems)
 }
@@ -69,13 +89,67 @@ export function compareItems(a: TaskItem, b: TaskItem): number {
     || a.task.title.localeCompare(b.task.title)
 }
 
-export function overdue(tasks: Task[], now: ISODate): Task[] {
-  return tasks.filter(t => !t.recur && !t.done && t.due && t.due < now)
-    .sort((a, b) => a.due!.localeCompare(b.due!))
+/** The day a one-off task is shown on: the planned day, or failing that the deadline. */
+export function displayDate(t: Task): ISODate | undefined {
+  return t.due ?? t.deadline
 }
 
+export function overdue(tasks: Task[], now: ISODate): Task[] {
+  return tasks.filter(t => !t.recur && !t.done && (displayDate(t) ?? '9999') < now)
+    .sort((a, b) => (displayDate(a) ?? '').localeCompare(displayDate(b) ?? ''))
+}
+
+/** Tasks with no planned day and no deadline. */
 export function unplanned(tasks: Task[]): Task[] {
-  return tasks.filter(t => !t.due && !t.done)
+  return tasks.filter(t => !t.due && !t.deadline && !t.done)
+}
+
+/** Open one-off tasks with a deadline, soonest first. */
+export function withDeadlines(tasks: Task[]): Task[] {
+  return tasks.filter(t => !t.recur && !t.done && t.deadline).sort((a, b) => a.deadline!.localeCompare(b.deadline!))
+}
+
+export type DeadlineTone = 'overdue' | 'today' | 'soon' | 'later'
+
+export interface DeadlineStatus {
+  days: number
+  tone: DeadlineTone
+  /** "3 days left", "Due today", "2 days overdue" */
+  label: string
+}
+
+export function deadlineStatus(deadline: ISODate, now: ISODate, soonDays = 3): DeadlineStatus {
+  const days = diffDays(now, deadline)
+  if (days < 0) return { days, tone: 'overdue', label: `${-days} day${days === -1 ? '' : 's'} overdue` }
+  if (days === 0) return { days, tone: 'today', label: 'Due today' }
+  return { days, tone: days <= soonDays ? 'soon' : 'later', label: days === 1 ? 'Due tomorrow' : `${days} days left` }
+}
+
+export function subtaskProgress(t: Task): { done: number; total: number } {
+  const list = t.subtasks ?? []
+  return { done: list.filter(x => x.done).length, total: list.length }
+}
+
+/** Moves a one-off task to another planned day (or clears it with null). Returns a new task. */
+export function reschedule(task: Task, to: ISODate | null): Task {
+  return { ...task, due: to ?? undefined, time: to ? task.time : undefined }
+}
+
+/** The handful of dates offered by the "reschedule" buttons. */
+export function quickDates(now: ISODate): { label: string; date: ISODate }[] {
+  // The first Monday after tomorrow, so "Next week" never coincides with "Tomorrow" (e.g. on a Sunday).
+  let nextMonday = addDays(now, 2)
+  while ((new Date(`${nextMonday}T12:00:00`).getDay() + 6) % 7 !== 0) nextMonday = addDays(nextMonday, 1)
+  return [
+    { label: 'Today', date: now },
+    { label: 'Tomorrow', date: addDays(now, 1) },
+    { label: 'Next week', date: nextMonday }
+  ]
+}
+
+/** When a reminder for this occurrence should fire, as a local "YYYY-MM-DDTHH:MM" string. */
+export function reminderMoment(target: ISODate, r: Reminder): string {
+  return `${addDays(target, -Math.max(0, r.daysBefore))}T${r.time}`
 }
 
 export function recurring(tasks: Task[]): Task[] {

@@ -30,6 +30,8 @@ export interface QuizQuestion {
   cardId?: string
   /** True for cloze prompts, whose prompt string contains the hidden-marker characters. */
   cloze?: boolean
+  /** The note the question came from, for the error log. */
+  path?: string
 }
 
 export function extractQuizBlocks(text: string): string[] {
@@ -160,13 +162,13 @@ export function generateQuestions(cards: Card[], opts: GenerateOptions): QuizQue
       const distractors = shuffle(basicBacks.filter(b => b !== correct), random).slice(0, 3)
       if (wantChoice && distractors.length >= 2 && correct.length <= 140) {
         questions.push({
-          id: card.id, cardId: card.id, kind: 'choice', prompt: card.front, answers: [],
+          id: card.id, cardId: card.id, path: card.path, kind: 'choice', prompt: card.front, answers: [],
           options: shuffle([{ text: correct, correct: true }, ...distractors.map(text => ({ text, correct: false }))], random)
         })
       } else if (correct.split(/\s+/).length <= 3 && opts.mode !== 'choice') {
-        questions.push({ id: card.id, cardId: card.id, kind: 'text', prompt: card.front, options: [], answers: [correct] })
+        questions.push({ id: card.id, cardId: card.id, path: card.path, kind: 'text', prompt: card.front, options: [], answers: [correct] })
       } else {
-        questions.push({ id: card.id, cardId: card.id, kind: 'recall', prompt: card.front, options: [], answers: [card.back] })
+        questions.push({ id: card.id, cardId: card.id, path: card.path, kind: 'recall', prompt: card.front, options: [], answers: [card.back] })
       }
     } else {
       const answers = clozeAnswers(card.front, card.clozeIndex!)
@@ -174,11 +176,11 @@ export function generateQuestions(cards: Card[], opts: GenerateOptions): QuizQue
       const distractors = shuffle(clozeBacks.filter(b => !answers.includes(b)), random).slice(0, 3)
       if (wantChoice && distractors.length >= 2) {
         questions.push({
-          id: card.id, cardId: card.id, kind: 'choice', prompt, cloze: true, answers: [],
+          id: card.id, cardId: card.id, path: card.path, kind: 'choice', prompt, cloze: true, answers: [],
           options: shuffle([{ text: answers[0], correct: true }, ...distractors.map(text => ({ text, correct: false }))], random)
         })
       } else {
-        questions.push({ id: card.id, cardId: card.id, kind: 'text', prompt, cloze: true, options: [], answers })
+        questions.push({ id: card.id, cardId: card.id, path: card.path, kind: 'text', prompt, cloze: true, options: [], answers })
       }
     }
   })

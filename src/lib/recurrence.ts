@@ -1,5 +1,5 @@
 import {
-  addDays, daysInMonth, diffDays, fromISO, startOfWeek, weekday, WEEKDAYS,
+  addDays, daysInMonth, diffDays, fromISO, mondayOfWeek, weekday, WEEKDAYS,
   type ISODate
 } from './dates'
 
@@ -27,7 +27,7 @@ export function occursOn(anchor: ISODate, rule: Recurrence, date: ISODate): bool
     case 'week': {
       const days = rule.weekdays?.length ? rule.weekdays : [a.getDay()]
       if (!days.includes(d.getDay())) return false
-      const weeks = Math.round(diffDays(startOfWeek(anchor), startOfWeek(date)) / 7)
+      const weeks = Math.round(diffDays(mondayOfWeek(anchor), mondayOfWeek(date)) / 7)
       return weeks % every === 0
     }
     case 'month': {

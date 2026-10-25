@@ -10,6 +10,8 @@
   let { path }: { path: string | null } = $props()
 
   let container: HTMLDivElement
+  // Only outside edits that happen after this editor appeared may be applied; older ones are already in the index.
+  let seenExternal = app.externalChange?.n ?? 0
   let view: EditorView | undefined
   let currentPath: string | null = null
   let saveTimer: ReturnType<typeof setTimeout> | undefined
@@ -108,6 +110,7 @@
         modeCompartment.of(modeExtensions()),
         EditorView.updateListener.of(u => {
           if (u.docChanged && !u.transactions.some(t => t.annotation(external))) scheduleSave()
+          if (u.selectionSet || u.docChanged) rememberView()
         })
       ]
     })
@@ -117,7 +120,7 @@
     if (!currentPath) return
     app.dirty.add(currentPath)
     clearTimeout(saveTimer)
-    saveTimer = setTimeout(flush, 700)
+    saveTimer = setTimeout(flush, 500)
   }
 
   async function flush() {
@@ -128,9 +131,36 @@
     await app.saveNote(path, view.state.doc.toString())
   }
 
+  function rememberView() {
+    if (!view || !currentPath || restoring) return
+    app.noteView[currentPath] = { anchor: view.state.selection.main.anchor, scroll: pageScroller()?.scrollTop ?? 0 }
+  }
+
+  let restoring = false
+
+  function restoreView(path: string) {
+    const saved = app.noteView[path]
+    if (!saved || !view) return
+    restoring = true
+    const anchor = Math.min(saved.anchor, view.state.doc.length)
+    view.dispatch({ selection: { anchor } })
+    // CodeMirror measures the document lazily, so the page may be too short at first and clamp the scroll target.
+    // Keep nudging for a few frames until the position sticks.
+    let tries = 0
+    const apply = () => {
+      const scroller = pageScroller()
+      if (!scroller) { restoring = false; return }
+      scroller.scrollTo({ top: saved.scroll })
+      if (Math.abs(scroller.scrollTop - saved.scroll) > 2 && tries++ < 40) requestAnimationFrame(apply)
+      else restoring = false
+    }
+    requestAnimationFrame(apply)
+  }
+
   function switchTo(path: string | null) {
     if (!view || path === currentPath) return
     void flush()
+    rememberView()
     if (currentPath) states.set(currentPath, view.state)
     currentPath = path
     app.editorPath = path
@@ -148,7 +178,8 @@
       const { line } = app.pendingLine
       app.pendingLine = null
       scrollToLine(line)
-    } else pageScroller()?.scrollTo({ top: 0 })
+    } else if (app.noteView[path]) restoreView(path)
+    else pageScroller()?.scrollTo({ top: 0 })
   }
 
   const pageScroller = () => container?.closest<HTMLElement>('.page')
@@ -192,18 +223,29 @@
         view!.dispatch({ changes: { from: 0, to: doc.length, insert: text }, selection: { anchor: Math.min(view!.state.selection.main.head, text.length) } })
       },
       scrollToLine,
+      flush,
       focus: () => view!.focus()
     }
+    // Track scrolling as it happens: by the time the component is destroyed its scroll container is already detached.
+    const scroller = pageScroller()
+    scroller?.addEventListener('scroll', rememberView, { passive: true })
     const onHide = () => { void flush() }
+    const onVisibility = () => { if (document.visibilityState === 'hidden') void flush() }
     window.addEventListener('blur', onHide)
     window.addEventListener('beforeunload', onHide)
+    window.addEventListener('pagehide', onHide)
+    document.addEventListener('visibilitychange', onVisibility)
     return () => {
+      scroller?.removeEventListener('scroll', rememberView)
       window.removeEventListener('blur', onHide)
       window.removeEventListener('beforeunload', onHide)
+      window.removeEventListener('pagehide', onHide)
+      document.removeEventListener('visibilitychange', onVisibility)
     }
   })
 
   onDestroy(() => {
+    // Not rememberView() here: the scroll container is already detached, so it would read 0 and clobber the real value.
     void flush()
     app.editor = null
     app.editorPath = null
@@ -225,9 +267,10 @@
   // A rename elsewhere or an edit made outside the app.
   $effect(() => {
     const ch = app.externalChange
-    if (!ch || !view) return
+    if (!ch || !view || ch.n <= seenExternal) return
     untrack(() => {
       if (ch.path !== currentPath || !view) return
+      seenExternal = ch.n
       const doc = view.state.doc
       if (doc.toString() === ch.text) return
       const head = Math.min(view.state.selection.main.head, ch.text.length)

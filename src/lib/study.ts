@@ -22,9 +22,11 @@ export interface StudyData {
   quizzes: QuizResult[]
   /** Minutes of completed Pomodoro focus sessions per day. */
   focus: Record<ISODate, number>
+  /** Flashcard reviews and correct answers per note, for the accuracy breakdown. */
+  notes: Record<string, { reviews: number; correct: number }>
 }
 
-export const emptyStudy = (): StudyData => ({ cards: {}, log: {}, revisions: {}, quizzes: [], focus: {} })
+export const emptyStudy = (): StudyData => ({ cards: {}, log: {}, revisions: {}, quizzes: [], focus: {}, notes: {} })
 
 export type Scope =
   | { type: 'all' }

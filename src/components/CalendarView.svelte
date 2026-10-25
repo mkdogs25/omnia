@@ -2,12 +2,12 @@
   import { app } from '../lib/app.svelte'
   import {
     addDays, addMonths, diffDays, formatLong, formatTime, fromISO, monthGrid, monthTitle, startOfMonth,
-    startOfWeek, today, toISO, WEEKDAYS, MONTHS, type ISODate
+    startOfWeek, today, toISO, weekdayOrder, WEEKDAYS, MONTHS, type ISODate
   } from '../lib/dates'
   import { describeRecurrence, type Recurrence } from '../lib/recurrence'
   import { parseQuickAdd } from '../lib/quickadd'
   import { forecast, dueRevisions } from '../lib/study'
-  import { eventsInRange, itemsInRange, overdue, type CalEvent } from '../lib/tasks'
+  import { eventsInRange, itemsInRange, overdue, withDeadlines, type CalEvent } from '../lib/tasks'
   import { noteTitle } from '../lib/vault'
   import Icon from './Icon.svelte'
   import TaskRow from './TaskRow.svelte'
@@ -30,6 +30,7 @@
   const to = $derived(days[days.length - 1])
 
   const taskItems = $derived(itemsInRange(app.tasks, from, to))
+  const deadlineTasks = $derived(withDeadlines(app.tasks).filter(t => t.deadline! >= from && t.deadline! <= to))
   const evs = $derived(eventsInRange(app.events, from, to))
   const cards = $derived(app.allCards())
   const cardForecast = $derived(forecast(cards, app.study.cards, now, 120))
@@ -38,7 +39,9 @@
   function chipsFor(day: ISODate) {
     const tasks = taskItems.filter(i => i.date === day).map(i => ({ kind: 'task' as const, key: 't' + i.task.id + day, item: i }))
     const events = evs.filter(e => e.on === day).map(e => ({ kind: 'event' as const, key: 'e' + e.id + day, ev: e }))
-    return [...events, ...tasks]
+    // A deadline gets its own flag unless the task is already planned for that same day.
+    const flags = deadlineTasks.filter(t => t.deadline === day && t.due !== day).map(t => ({ kind: 'deadline' as const, key: 'd' + t.id + day, task: t }))
+    return [...flags, ...events, ...tasks]
   }
 
   const cardsOn = (day: ISODate) => {
@@ -69,6 +72,7 @@
   }
 
   const selectedTasks = $derived(itemsInRange(app.tasks, selected, selected))
+  const selectedDeadlines = $derived(withDeadlines(app.tasks).filter(t => t.deadline === selected && t.due !== selected))
   const selectedEvents = $derived(eventsInRange(app.events, selected, selected))
   const lateTasks = $derived(selected === now ? overdue(app.tasks, now) : [])
   const selectedRevs = $derived(app.study ? revsOn(selected) : [])
@@ -122,7 +126,7 @@
   }
 
   const dayNum = (d: ISODate) => fromISO(d).getDate()
-  const weekdayHeads = [1, 2, 3, 4, 5, 6, 0].map(d => WEEKDAYS[d].slice(0, 3))
+  const weekdayHeads = $derived(weekdayOrder().map(d => WEEKDAYS[d].slice(0, 3)))
 </script>
 
 <section class="cal parchment">
@@ -172,6 +176,10 @@
                   onclick={e => { e.stopPropagation(); pick(day); editEvent(chip.ev.id) }}>
                   {#if chip.ev.start}<span class="t">{formatTime(chip.ev.start)}</span>{/if}<span class="truncate">{chip.ev.title}</span>
                 </button>
+              {:else if chip.kind === 'deadline'}
+                <button class="chip flag" title="Deadline" onclick={e => { e.stopPropagation(); pick(day) }}>
+                  <Icon name="flag" size={12} /><span class="truncate">{chip.task.title}</span>
+                </button>
               {:else}
                 <button class="chip task" class:done={chip.item.done} draggable={!chip.item.recurring}
                   ondragstart={e => e.dataTransfer?.setData('text/omnia-task', chip.item.task.id)}
@@ -219,6 +227,12 @@
             <label>Ends<input class="field" type="time" value={editing.end ?? ''} onchange={e => patchEvent({ end: e.currentTarget.value || undefined })} /></label>
           </div>
           <textarea class="field" rows="2" placeholder="Notes" value={editing.notes ?? ''} onchange={e => patchEvent({ notes: e.currentTarget.value || undefined })}></textarea>
+          <label>Remind me
+            <select class="field" value={editing.remindMin === undefined ? '' : String(editing.remindMin)} disabled={!editing.start} onchange={e => patchEvent({ remindMin: e.currentTarget.value === '' ? undefined : +e.currentTarget.value })}>
+              <option value="">No reminder</option><option value="0">At the start</option><option value="10">10 minutes before</option>
+              <option value="30">30 minutes before</option><option value="60">1 hour before</option><option value="1440">1 day before</option>
+            </select>
+          </label>
           <div class="swatches">
             {#each COLORS as c}<button class="sw" class:on={(editing.color ?? COLORS[0]) === c} style:background={c} aria-label="Colour {c}" onclick={() => patchEvent({ color: c })}></button>{/each}
           </div>
@@ -246,7 +260,8 @@
           <div class="sec-head"><h3 class="eyebrow">Tasks</h3></div>
           {#each lateTasks as t (t.id)}<TaskRow task={t} date={t.due} done={false} compact label="Overdue" />{/each}
           {#each selectedTasks as it (it.task.id + it.date)}<TaskRow task={it.task} date={it.date} done={it.done} compact showDate={false} />{/each}
-          {#if !lateTasks.length && !selectedTasks.length}<p class="faint none">No tasks.</p>{/if}
+          {#each selectedDeadlines as t (t.id)}<TaskRow task={t} done={false} compact showDate={false} />{/each}
+          {#if !lateTasks.length && !selectedTasks.length && !selectedDeadlines.length}<p class="faint none">No tasks.</p>{/if}
           <form class="addtask" onsubmit={e => { e.preventDefault(); addQuickTask() }}>
             <Icon name="plus" size={15} /><input bind:value={quick} placeholder="Add task for this day" aria-label="Add task for this day" />
           </form>
@@ -296,6 +311,8 @@
   .chip.ev { background: color-mix(in srgb, var(--c) 18%, transparent); border-left: 3px solid var(--c); }
   .chip.ev .t { color: var(--text-muted); flex: none; }
   .chip.task { color: var(--text); }
+  .chip.flag { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); font-weight: 600; }
+  .chip.flag :global(svg) { flex: none; }
   .chip.task.done { color: var(--text-faint); text-decoration: line-through; }
   .chip.task :global(svg) { color: var(--accent); flex: none; }
   .more { font-size: var(--fs-xs); color: var(--text-muted); padding-left: 6px; }
