@@ -1,3 +1,5 @@
+import { ANNOTATION_DIR } from './annotations'
+import { OCR_DIR, ocrFileName } from './ocr'
 import { addVersion, HISTORY_DIR, historyFileName, normaliseHistory, shouldSnapshot, type HistoryFile, type Version } from './history'
 import { normaliseMistakes, recordHit, recordMiss, type Mistake, type MissInput } from './mistakes'
 import { untrack } from 'svelte'
@@ -676,6 +678,37 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
     try { await vault.remove(joinPath(HISTORY_DIR, historyFileName(from))) } catch { /* already gone */ }
   }
 
+  /** After a PDF or Word file is renamed: its notes, OCR text and highlights move with it. */
+  private async followDocument(from: string, to: string) {
+    const vault = this.vault
+    if (!vault) return
+    const oldNotes = companionPath(from)
+    const newNotes = companionPath(to)
+    if (oldNotes !== newNotes && this.index.notes.has(oldNotes) && !(await vault.exists(newNotes))) {
+      try {
+        await vault.move(oldNotes, newNotes)
+        await this.rewriteLinks(noteTitle(oldNotes), noteTitle(newNotes), newNotes)
+        this.remapPaths(oldNotes, newNotes)
+      } catch { /* the notes stay where they were; links to them still resolve */ }
+    }
+    for (const dir of [OCR_DIR, ANNOTATION_DIR]) {
+      const a = joinPath(dir, ocrFileName(from))
+      const b = joinPath(dir, ocrFileName(to))
+      try {
+        if (await vault.exists(a)) {
+          await vault.writeText(b, await vault.readText(a))
+          await vault.remove(a)
+        }
+      } catch { /* sidecar data is only a convenience */ }
+    }
+    for (const key of [`omnia:pdfpage:${from}`]) {
+      try {
+        const v = localStorage.getItem(key)
+        if (v) { localStorage.setItem(`omnia:pdfpage:${to}`, v); localStorage.removeItem(key) }
+      } catch { /* ignore */ }
+    }
+  }
+
   /** Unsaved edits must reach the old path before a note is renamed, moved or deleted, or the old file would reappear. */
   private async settleEditor() {
     await this.editor?.flush()
@@ -687,14 +720,19 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
     if (!vault) return
     await this.settleEditor()
     const isNoteFile = isNote(path)
-    const clean = newName.trim().replace(/[\\/:*?"<>|]/g, '-')
+    const docExt = isDoc(path) ? (path.match(/\.(pdf|docx)$/i)?.[0] ?? '') : ''
+    let clean = newName.trim().replace(/[\\/:*?"<>|]/g, '-')
+    // Documents keep their extension even when the new name is typed without it.
+    if (docExt && !/\.(pdf|docx)$/i.test(clean)) clean += docExt
     if (!clean) return
     const to = joinPath(dirname(path), isNoteFile ? clean.replace(/\.md$/i, '') + '.md' : clean)
     if (to === path) return
     try {
+      if (await vault.exists(to)) return this.toast(`"${basename(to)}" already exists`)
       await vault.move(path, to)
       await this.rewriteLinks(isNoteFile ? noteTitle(path) : basename(path), isNoteFile ? noteTitle(to) : basename(to), to)
       this.remapPaths(path, to)
+      if (docExt) await this.followDocument(path, to)
       await this.refresh()
       this.index.rebuild()
       this.bump()

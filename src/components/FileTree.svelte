@@ -38,7 +38,8 @@
 
   function startRename(entry: Entry) {
     renaming = entry.path
-    renameValue = entry.kind === 'file' ? noteTitle(entry.path) : entry.name
+    // Notes are edited without ".md" and documents without ".pdf" / ".docx"; the extension is put back on commit.
+    renameValue = entry.kind === 'file' ? noteTitle(entry.path).replace(/\.(pdf|docx)$/i, '') : entry.name
   }
 
   async function commitRename() {
