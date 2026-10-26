@@ -31,6 +31,45 @@ export const DEFAULT_HOME_WIDGETS: HomeWidget[] = [
 
 export type Density = 'compact' | 'comfortable' | 'spacious'
 
+/** Your own background and text colours, used instead of a built-in palette when enabled. */
+export interface CustomColours {
+  enabled: boolean
+  /** Whether these colours are a dark scheme (so the rest of the interface switches to its dark tones). */
+  dark: boolean
+  bg: string
+  /** Side panels; blank to derive it from the background. */
+  side: string
+  text: string
+}
+
+/** Everything that makes up how Omnia looks. A saved theme is one of these with a name. */
+export interface Look {
+  scheme: 'auto' | 'light' | 'dark'
+  lightPalette: string
+  darkPalette: string
+  customColours: CustomColours
+  accent: string
+  headingFont: string
+  bodyFont: string
+  monoFont: string
+  customHeadingFont: string
+  customBodyFont: string
+  /** Colours for **bold**, *italic*, ***both*** and headings in notes; blank keeps the default. */
+  boldColour: string
+  italicColour: string
+  boldItalicColour: string
+  headingColour: string
+}
+
+export interface UserTheme { id: string; name: string; look: Look }
+
+export const LOOK_KEYS: (keyof Look)[] = [
+  'scheme', 'lightPalette', 'darkPalette', 'customColours', 'accent', 'headingFont', 'bodyFont', 'monoFont',
+  'customHeadingFont', 'customBodyFont', 'boldColour', 'italicColour', 'boldItalicColour', 'headingColour'
+]
+
+export const DEFAULT_CUSTOM_COLOURS: CustomColours = { enabled: false, dark: false, bg: '#fcf5e1', side: '', text: '#2a2218' }
+
 export interface Settings {
   // Notes
   dailyFolder: string
@@ -71,6 +110,12 @@ export interface Settings {
   darkPalette: string
   /** Hex colour, or empty for the built-in terracotta. */
   accent: string
+  customColours: CustomColours
+  boldColour: string
+  italicColour: string
+  boldItalicColour: string
+  headingColour: string
+  themes: UserTheme[]
   headingFont: string
   bodyFont: string
   monoFont: string
@@ -105,7 +150,7 @@ export const DEFAULT_SETTINGS: Settings = {
   newPerDay: 20,
   focusMin: 25, shortMin: 5, longMin: 15, longEvery: 4, pomoAutoStart: false, pomoSound: true,
   notifEnabled: true, digestTime: '09:00', digestEmpty: false, quietEnabled: true, quietStart: '22:00', quietEnd: '07:00', deadlineLeadDays: 3,
-  lightPalette: 'parchment', darkPalette: 'mocha', accent: '', headingFont: 'libron', bodyFont: 'inter', monoFont: 'system-mono',
+  lightPalette: 'parchment', darkPalette: 'mocha', accent: '', customColours: { ...DEFAULT_CUSTOM_COLOURS }, boldColour: '', italicColour: '', boldItalicColour: '', headingColour: '', themes: [], headingFont: 'libron', bodyFont: 'inter', monoFont: 'system-mono',
   customHeadingFont: '', customBodyFont: '', uiScale: 1, lineHeight: 1.7, density: 'comfortable', reducedMotion: 'system', highContrast: false,
   sidebarWidth: 300, rightWidth: 340, rightSide: 'right', startView: 'notes',
   ribbonTop: [...DEFAULT_RIBBON_TOP], ribbonBottom: [...DEFAULT_RIBBON_BOTTOM], homeWidgets: DEFAULT_HOME_WIDGETS.map(w => ({ ...w })),
@@ -129,6 +174,8 @@ export function normaliseSettings(saved: Partial<Settings> | undefined): Setting
   s.sidebarWidth = Math.min(480, Math.max(200, Number(s.sidebarWidth) || 300))
   s.rightWidth = Math.min(640, Math.max(260, Number(s.rightWidth) || 340))
   if (!s.shortcuts || typeof s.shortcuts !== 'object') s.shortcuts = {}
+  s.customColours = { ...DEFAULT_CUSTOM_COLOURS, ...(s.customColours && typeof s.customColours === 'object' ? s.customColours : {}) }
+  s.themes = Array.isArray(s.themes) ? s.themes.filter(t => t && typeof t.id === 'string' && typeof t.name === 'string' && t.look && typeof t.look === 'object') : []
   return s
 }
 
@@ -224,4 +271,19 @@ export const ACTIONS: ActionInfo[] = [
   { id: 'capture', label: 'Quick capture', combo: 'Alt+Q', group: 'Create' },
   { id: 'pomodoro', label: 'Pomodoro timer', combo: 'Alt+P', group: 'Tools' },
   { id: 'focusMode', label: 'Focus mode (hide everything but the note)', combo: 'Alt+F', group: 'Tools' }
+]
+
+// ---------------------------------------------------------------- ready-made themes
+
+type Preset = { id: string; name: string; look: Partial<Look> & { customColours: CustomColours } }
+const colours = (dark: boolean, bg: string, side: string, text: string): CustomColours => ({ enabled: true, dark, bg, side, text })
+
+/** Starting points. They can be used as they are, or copied and changed. */
+export const THEME_PRESETS: Preset[] = [
+  { id: 'preset:solarized-light', name: 'Solarized Light', look: { scheme: 'light', customColours: colours(false, '#fdf6e3', '#eee8d5', '#586e75'), accent: '#268bd2', boldColour: '#cb4b16', italicColour: '#6c71c4', boldItalicColour: '#d33682', headingColour: '#268bd2' } },
+  { id: 'preset:solarized-dark', name: 'Solarized Dark', look: { scheme: 'dark', customColours: colours(true, '#002b36', '#073642', '#93a1a1'), accent: '#2aa198', boldColour: '#cb4b16', italicColour: '#b58900', boldItalicColour: '#d33682', headingColour: '#268bd2' } },
+  { id: 'preset:nord', name: 'Nord', look: { scheme: 'dark', customColours: colours(true, '#2e3440', '#272c36', '#d8dee9'), accent: '#88c0d0', boldColour: '#ebcb8b', italicColour: '#a3be8c', boldItalicColour: '#b48ead', headingColour: '#81a1c1' } },
+  { id: 'preset:dracula', name: 'Dracula', look: { scheme: 'dark', customColours: colours(true, '#282a36', '#21222c', '#f8f8f2'), accent: '#bd93f9', boldColour: '#ffb86c', italicColour: '#8be9fd', boldItalicColour: '#ff79c6', headingColour: '#50fa7b' } },
+  { id: 'preset:gruvbox', name: 'Gruvbox', look: { scheme: 'dark', customColours: colours(true, '#282828', '#1d2021', '#ebdbb2'), accent: '#fe8019', boldColour: '#fabd2f', italicColour: '#b8bb26', boldItalicColour: '#d3869b', headingColour: '#83a598' } },
+  { id: 'preset:newsprint', name: 'Newsprint', look: { scheme: 'light', customColours: colours(false, '#f5f5f0', '#e9e9e2', '#1d1d1b'), accent: '#8b1a1a', boldColour: '#000000', italicColour: '#5a3e2b', boldItalicColour: '#8b1a1a', headingColour: '#8b1a1a', headingFont: 'georgia', bodyFont: 'georgia' } }
 ]

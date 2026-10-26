@@ -1,15 +1,17 @@
 <script lang="ts">
   import { onMount, setContext } from 'svelte'
   import { app } from '../lib/app.svelte'
-  import { contrastRatio, normaliseHex, paletteChoices } from '../lib/appearance'
+  import { contrastRatio, customPaletteVars, lookOf, normaliseHex, paletteChoices } from '../lib/appearance'
+  import { downloadFile } from '../lib/download'
   import { notifier } from '../lib/notify.svelte'
   import { OCR_LANGUAGES } from '../lib/ocr'
   import { pomodoro } from '../lib/pomodoro.svelte'
   import {
-    ACCENT_PRESETS, ACTIONS, DEFAULT_SETTINGS, FONTS, MONO_FONTS, normaliseSettings, PALETTES, TOOLS,
-    type Density, type Settings, type ToolId
+    ACCENT_PRESETS, ACTIONS, DEFAULT_CUSTOM_COLOURS, DEFAULT_SETTINGS, FONTS, MONO_FONTS, normaliseSettings, PALETTES, THEME_PRESETS, TOOLS,
+    type CustomColours, type Density, type Look, type Settings, type ToolId, type UserTheme
   } from '../lib/settings'
   import { comboFor, comboFromEvent, conflictFor, displayCombo } from '../lib/shortcuts'
+  import ColourField from './ColourField.svelte'
   import Icon from './Icon.svelte'
   import Setting from './Setting.svelte'
 
@@ -60,6 +62,45 @@
     return id === 'custom' && custom.trim() ? `'${custom.trim().replace(/['\\]/g, '')}'` : (f?.stack ?? 'inherit')
   }
   const monoStack = $derived(MONO_FONTS.find(f => f.id === s.monoFont)?.stack ?? 'monospace')
+
+  // ---- themes and colours
+  let themeName = $state('')
+  let renamingTheme = $state<string | null>(null)
+  let themeInput: HTMLInputElement | undefined = $state()
+  const setColours = (patch: Partial<CustomColours>) => set({ customColours: { ...s.customColours, ...patch } })
+  const currentLook = $derived(JSON.stringify(lookOf(s, app.theme)))
+  const sameLook = (look: Partial<Look>) => {
+    const full = { ...lookOf(DEFAULT_SETTINGS, look.scheme ?? 'auto'), ...look }
+    return JSON.stringify(full) === currentLook
+  }
+  const swatch = (look: Partial<Look>): [string, string, string, string] => {
+    const c = look.customColours
+    const pal = PALETTES.find(p => p.id === (look.scheme === 'dark' ? look.darkPalette ?? 'mocha' : look.lightPalette ?? 'parchment'))
+    const own = c?.enabled ? customPaletteVars(c) : null
+    return own ? [c!.bg, c!.side || c!.bg, c!.text, look.accent || '#d95c3a'] : [pal?.swatch[0] ?? '#fcf5e1', pal?.swatch[1] ?? '#f6ecd3', pal?.swatch[2] ?? '#2a2218', look.accent || '#d95c3a']
+  }
+  function saveCurrent() {
+    const t = app.saveTheme(themeName)
+    themeName = ''
+    app.toast(`Saved “${t.name}”`)
+  }
+  function exportTheme(t: UserTheme) {
+    downloadFile(`${t.name.replace(/[^\w -]+/g, '').trim() || 'theme'}.omnia-theme.json`, JSON.stringify({ omniaTheme: 1, name: t.name, look: t.look }, null, 2), 'application/json')
+  }
+  let themeFile: HTMLInputElement | undefined = $state()
+  async function importTheme(file: File) {
+    try {
+      const data = JSON.parse(await file.text())
+      if (!data?.look || typeof data.look !== 'object') throw new Error('not a theme file')
+      const name = String(data.name ?? file.name.replace(/\.json$/i, '')).slice(0, 60)
+      app.updateSettings({ themes: [...s.themes, { id: crypto.randomUUID(), name, look: data.look }] })
+      app.toast(`Imported “${name}”`)
+    } catch (e) {
+      app.toast(`Couldn’t import that theme: ${(e as Error).message}`)
+    }
+  }
+  const bgForContrast = $derived(normaliseHex(s.customColours.bg) ?? '#fcf5e1')
+  const textContrast = $derived(contrastRatio(normaliseHex(s.customColours.text) ?? '#2a2218', bgForContrast))
 
   // ---- tools helpers
   const allTools = (group: 'top' | 'bottom') => (Object.keys(TOOLS) as ToolId[]).filter(id => TOOLS[id].group === group)
@@ -142,7 +183,8 @@
     set({
       lightPalette: d.lightPalette, darkPalette: d.darkPalette, accent: d.accent, headingFont: d.headingFont, bodyFont: d.bodyFont, monoFont: d.monoFont,
       customHeadingFont: '', customBodyFont: '', uiScale: d.uiScale, lineHeight: d.lineHeight, density: d.density, reducedMotion: d.reducedMotion,
-      highContrast: d.highContrast, fontSize: d.fontSize
+      highContrast: d.highContrast, fontSize: d.fontSize,
+      customColours: { ...DEFAULT_CUSTOM_COLOURS }, boldColour: '', italicColour: '', boldItalicColour: '', headingColour: ''
     })
   }
   function setPomo(key: 'focusMin' | 'shortMin' | 'longMin' | 'longEvery', value: string, max: number) {
@@ -188,7 +230,74 @@
           </div>
         </Setting>
 
-        <Setting label="Light palette" hint="Background and text colours used in light mode." keywords="colour color background theme parchment paper sepia sage rose mist" stack>
+        <Setting label="Themes" hint="A theme is a whole look: colours, fonts and the colours of bold, italic and headings in notes. Pick one, or save your own." keywords="theme preset solarized nord dracula gruvbox save custom export import share" stack>
+          <div class="themes">
+            {#each THEME_PRESETS as t (t.id)}
+              <button class="theme" class:on={sameLook(t.look)} onclick={() => app.applyLook(t.look)} aria-label="Use the {t.name} theme" aria-pressed={sameLook(t.look)}>
+                <span class="tsw" style:background={swatch(t.look)[0]}><i style:background={swatch(t.look)[1]}></i><b style:background={swatch(t.look)[2]}></b><u style:background={swatch(t.look)[3]}></u></span>
+                {t.name}
+              </button>
+            {/each}
+            {#each s.themes as t (t.id)}
+              <div class="theme mine" class:on={sameLook(t.look)}>
+                <button class="grab" onclick={() => app.applyLook(t.look)} aria-label="Use my theme {t.name}" aria-pressed={sameLook(t.look)}>
+                  <span class="tsw" style:background={swatch(t.look)[0]}><i style:background={swatch(t.look)[1]}></i><b style:background={swatch(t.look)[2]}></b><u style:background={swatch(t.look)[3]}></u></span>
+                  {#if renamingTheme === t.id}
+                    <input class="field rename" bind:this={themeInput} value={t.name} aria-label="Theme name" onclick={e => e.stopPropagation()}
+                      onblur={e => { app.renameTheme(t.id, e.currentTarget.value); renamingTheme = null }}
+                      onkeydown={e => { e.stopPropagation(); if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') renamingTheme = null }} />
+                  {:else}{t.name}{/if}
+                </button>
+                <span class="tools-row">
+                  <button class="icon-btn" title="Overwrite with the current look" aria-label="Overwrite {t.name} with the current look" onclick={() => { app.resaveTheme(t.id); app.toast(`Updated “${t.name}”`) }}><Icon name="check" size={13} /></button>
+                  <button class="icon-btn" title="Rename" aria-label="Rename {t.name}" onclick={async () => { renamingTheme = t.id; await Promise.resolve(); themeInput?.focus(); themeInput?.select() }}><Icon name="pencil" size={13} /></button>
+                  <button class="icon-btn" title="Export to a file to share" aria-label="Export {t.name}" onclick={() => exportTheme(t)}><Icon name="download" size={13} /></button>
+                  <button class="icon-btn" title="Delete" aria-label="Delete {t.name}" onclick={() => app.deleteTheme(t.id)}><Icon name="trash" size={13} /></button>
+                </span>
+              </div>
+            {/each}
+          </div>
+          <form class="savebar" onsubmit={e => { e.preventDefault(); saveCurrent() }}>
+            <input class="field" placeholder="Name this look to save it as a theme" bind:value={themeName} aria-label="Theme name" />
+            <button class="btn primary" type="submit" disabled={!themeName.trim()}>Save current look</button>
+            <button class="btn" type="button" onclick={() => themeFile?.click()}><Icon name="upload" size={14} /> Import</button>
+            <input type="file" accept=".json,application/json" hidden bind:this={themeFile} onchange={e => { const f = e.currentTarget.files?.[0]; if (f) void importTheme(f); e.currentTarget.value = '' }} />
+          </form>
+        </Setting>
+
+        <Setting label="My own colours" hint="Choose your own background, side panel and text colours instead of a ready-made palette." keywords="custom background colour color theme wallpaper dark light" stack>
+          <div class="colour-block">
+          <label class="switchrow"><input type="checkbox" class="checkbox" checked={s.customColours.enabled} onchange={e => setColours({ enabled: e.currentTarget.checked })} aria-label="Use my own colours" /> Use my own colours</label>
+          {#if s.customColours.enabled}
+            <div class="seg">
+              <button class:on={!s.customColours.dark} onclick={() => setColours({ dark: false })}>Light base</button>
+              <button class:on={s.customColours.dark} onclick={() => setColours({ dark: true })}>Dark base</button>
+            </div>
+            <div class="colour-list">
+              <ColourField label="Background" value={s.customColours.bg} fallback={DEFAULT_CUSTOM_COLOURS.bg} clearable={false} onchange={v => setColours({ bg: v || DEFAULT_CUSTOM_COLOURS.bg })} />
+              <ColourField label="Side panels" value={s.customColours.side} fallback={s.customColours.bg} onchange={v => setColours({ side: v })} />
+              <ColourField label="Text" value={s.customColours.text} fallback={DEFAULT_CUSTOM_COLOURS.text} clearable={false} onchange={v => setColours({ text: v || DEFAULT_CUSTOM_COLOURS.text })} />
+            </div>
+            <p class="note" class:warn={textContrast < 4.5}>Text on background: <strong>{textContrast.toFixed(1)}:1</strong> {textContrast >= 7 ? '(very easy to read)' : textContrast >= 4.5 ? '(comfortable)' : '(hard to read: make the text lighter or darker)'}</p>
+            <p class="note">The accent colour, fonts and note colours below still apply. “Dark base” also switches the rest of the interface to its dark tones.</p>
+          {/if}
+          </div>
+        </Setting>
+
+        <Setting label="Colours in notes" hint="Give bold, italic, bold italic and headings their own colours. Leave one blank for the normal look." keywords="bold italic heading markdown text colour color emphasis strong" stack>
+          <div class="colour-list">
+            <ColourField label="Bold" value={s.boldColour} fallback={isDark ? '#ece1cb' : '#2a2218'} onchange={v => set({ boldColour: v })} />
+            <ColourField label="Italic" value={s.italicColour} fallback={accentNow} onchange={v => set({ italicColour: v })} />
+            <ColourField label="Bold italic" value={s.boldItalicColour} fallback={s.italicColour || accentNow} onchange={v => set({ boldItalicColour: v })} />
+            <ColourField label="Headings" value={s.headingColour} fallback={isDark ? '#ece1cb' : '#2a2218'} onchange={v => set({ headingColour: v })} />
+          </div>
+          <div class="mdpreview" aria-label="Preview">
+            <div class="h" style:color={s.headingColour || undefined}>A heading in your notes</div>
+            <p>Plain text with <strong style:color={s.boldColour || undefined}>bold</strong>, <em style:color={s.italicColour || accentNow}>italic</em> and <strong><em style:color={s.boldItalicColour || s.italicColour || accentNow}>bold italic</em></strong> words.</p>
+          </div>
+        </Setting>
+
+        <Setting label="Light palette" hint={s.customColours.enabled && !s.customColours.dark ? 'Not used while “My own colours” is on.' : 'Background and text colours used in light mode.'} keywords="colour color background theme parchment paper sepia sage rose mist" stack>
           <div class="palettes">
             {#each paletteChoices(false) as p}
               <button class="pal" class:on={s.lightPalette === p.id} onclick={() => set({ lightPalette: p.id })} aria-label="{p.label} palette" aria-pressed={s.lightPalette === p.id}>
@@ -199,7 +308,7 @@
           </div>
         </Setting>
 
-        <Setting label="Dark palette" hint="Used in dark mode." keywords="colour color background theme mocha slate midnight forest black" stack>
+        <Setting label="Dark palette" hint={s.customColours.enabled && s.customColours.dark ? 'Not used while “My own colours” is on.' : 'Used in dark mode.'} keywords="colour color background theme mocha slate midnight forest black" stack>
           <div class="palettes">
             {#each paletteChoices(true) as p}
               <button class="pal" class:on={s.darkPalette === p.id} onclick={() => set({ darkPalette: p.id })} aria-label="{p.label} palette" aria-pressed={s.darkPalette === p.id}>
@@ -544,6 +653,28 @@
   .hex { width: 110px; }
   .fontrow { display: flex; gap: 10px; flex-wrap: wrap; }
   .fontrow .field { width: 230px; }
+  .themes { display: flex; flex-wrap: wrap; gap: 10px; }
+  .theme { display: grid; gap: 6px; justify-items: center; font-size: var(--fs-sm); color: var(--text-muted); padding: 8px; border-radius: 12px; border: 2px solid transparent; min-width: 96px; }
+  .theme:hover { background: var(--bg-hover); }
+  .theme.on { border-color: var(--accent); color: var(--text); }
+  .theme.mine { padding: 0; gap: 0; }
+  .theme.mine .grab { display: grid; gap: 6px; justify-items: center; padding: 8px 8px 2px; color: inherit; font-size: inherit; }
+  .tools-row { display: flex; opacity: 0.55; padding-bottom: 4px; }
+  .theme.mine:hover .tools-row, .theme.mine:focus-within .tools-row { opacity: 1; }
+  .tools-row .icon-btn { width: 24px; height: 24px; }
+  .tsw { position: relative; display: block; width: 84px; height: 52px; border-radius: 8px; border: 1px solid var(--border-strong); overflow: hidden; }
+  .tsw i { position: absolute; inset: 0 auto 0 0; width: 24px; }
+  .tsw b { position: absolute; left: 34px; top: 12px; width: 38px; height: 5px; border-radius: 3px; }
+  .tsw u { position: absolute; left: 34px; bottom: 9px; width: 14px; height: 14px; border-radius: 50%; }
+  .rename { width: 84px; padding: 1px 4px; font-size: var(--fs-sm); text-align: center; }
+  .savebar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .savebar .field { width: 280px; }
+  .switchrow { display: inline-flex; align-items: center; gap: 8px; font-size: var(--fs-md); }
+  .colour-block { display: grid; gap: 10px; width: 100%; justify-items: start; }
+  .colour-list { display: grid; gap: 8px; margin: 10px 0 4px; }
+  .mdpreview { margin-top: 12px; padding: 12px 16px; border-radius: 10px; background: var(--bg-hover); }
+  .mdpreview .h { font-family: var(--font-heading); font-weight: 700; font-size: var(--fs-section); margin-bottom: 4px; }
+  .mdpreview p { margin: 0; }
   .preview { padding: 12px 16px; border-radius: 10px; background: var(--bg-hover); font-size: var(--fs-lg); line-height: 1.4; }
   .preview.heading { font-size: var(--fs-section); font-weight: 700; }
   .preview.mono { font-size: var(--fs-md); }

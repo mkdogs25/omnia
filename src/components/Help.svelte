@@ -9,6 +9,7 @@
   const editorKeys: [string, string][] = [
     ['Ctrl B / I / E', 'Bold, italic, inline code'],
     ['Ctrl K', 'Wrap selection as [[link]]'],
+    ['Ctrl Alt F', 'Insert a footnote (type text after [^1]: at the end)'],
     ['Ctrl Enter', 'Toggle a task checkbox on the line'],
     ['Ctrl Shift C', 'Turn the selection into a cloze deletion'],
     ['Ctrl F', 'Find in note'],

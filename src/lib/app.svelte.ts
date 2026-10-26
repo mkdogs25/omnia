@@ -13,7 +13,8 @@ import {
 } from './study'
 import { nextRevision, schedule, type Grade, type Rating } from './sr'
 import { shuffle, type QuizQuestion } from './quiz'
-import { DEFAULT_SETTINGS, normaliseSettings, type Settings } from './settings'
+import { lookOf, settingsFromLook } from './appearance'
+import { DEFAULT_SETTINGS, normaliseSettings, type Look, type Settings, type UserTheme } from './settings'
 import type { Card } from './cards'
 
 export type View = 'home' | 'notes' | 'tasks' | 'calendar' | 'study' | 'settings'
@@ -815,7 +816,19 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
 
   private remapPaths(from: string, to: string) {
     const moved = [...this.index.notes.keys()].filter(k => k === from || k.startsWith(from + '/'))
-    for (const old of moved) void this.moveHistory(old, to + old.slice(from.length))
+    for (const old of moved) {
+      const next = to + old.slice(from.length)
+      void this.moveHistory(old, next)
+      // The open editor reloads from the index as soon as the tab points at the new path, so the record has to be there
+      // already; waiting for the folder rescan would leave it showing an empty note.
+      const rec = this.index.notes.get(old)
+      if (rec && next !== old) {
+        this.index.set(next, rec.mtime, rec.text)
+        this.index.notes.delete(old)
+      }
+    }
+    this.index.rebuild()
+    this.bump()
     const map = (p: string) => (p === from ? to : p.startsWith(from + '/') ? to + p.slice(from.length) : p)
     this.tabs = this.tabs.map(t => ({ ...t, path: map(t.path) }))
     this.history = this.history.map(map)
@@ -1116,6 +1129,36 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
   updateSettings(patch: Partial<Settings>) {
     this.settings = { ...this.settings, ...patch }
     this.persistSoon.settings()
+  }
+
+  // ---------------------------------------------------------------- saved themes
+
+  /** Switches to a saved or ready-made look (colours, fonts and note colours). */
+  applyLook(look: Partial<Look>) {
+    this.updateSettings(settingsFromLook(look))
+    if (look.scheme === 'auto' || look.scheme === 'light' || look.scheme === 'dark') this.setTheme(look.scheme)
+  }
+
+  /** Stores how Omnia looks right now under a name. */
+  saveTheme(name: string): UserTheme {
+    const theme: UserTheme = { id: uid(), name: name.trim() || 'My theme', look: lookOf(this.settings, this.theme) }
+    this.updateSettings({ themes: [...this.settings.themes, theme] })
+    return theme
+  }
+
+  /** Overwrites a saved theme with the current look. */
+  resaveTheme(id: string) {
+    const look = lookOf(this.settings, this.theme)
+    this.updateSettings({ themes: this.settings.themes.map(t => (t.id === id ? { ...t, look } : t)) })
+  }
+
+  renameTheme(id: string, name: string) {
+    const n = name.trim()
+    if (n) this.updateSettings({ themes: this.settings.themes.map(t => (t.id === id ? { ...t, name: n } : t)) })
+  }
+
+  deleteTheme(id: string) {
+    this.updateSettings({ themes: this.settings.themes.filter(t => t.id !== id) })
   }
 
   setTheme(theme: Theme) {

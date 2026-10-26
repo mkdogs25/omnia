@@ -7,6 +7,7 @@ import { drawSelection, EditorView, keymap, type KeyBinding } from '@codemirror/
 import { GFM } from '@lezer/markdown'
 import { wrapCloze } from '../cards'
 import { noteTitle, dirname } from '../vault'
+import { nextFootnoteId } from './footnotes'
 
 /** Toggles a symmetric Markdown marker (e.g. ** or *) around each selection. */
 export function toggleWrap(marker: string) {
@@ -79,7 +80,28 @@ function makeCloze(view: EditorView): boolean {
   return true
 }
 
+/** Puts a numbered footnote marker at the cursor and opens its text at the end of the note. */
+function insertFootnote(view: EditorView): boolean {
+  const { state } = view
+  const lines: string[] = []
+  for (let n = 1; n <= state.doc.lines; n++) lines.push(state.doc.line(n).text)
+  const id = nextFootnoteId(lines)
+  const at = state.selection.main.to
+  const end = state.doc.length
+  const tail = state.doc.sliceString(Math.max(0, end - 2), end)
+  const gap = !end ? '' : tail === '\n\n' ? '' : tail.endsWith('\n') ? '\n' : '\n\n'
+  const def = `${gap}[^${id}]: `
+  const marker = `[^${id}]`
+  view.dispatch({
+    changes: [{ from: at, insert: marker }, { from: end, insert: def }],
+    selection: { anchor: end + marker.length + def.length },
+    scrollIntoView: true
+  })
+  return true
+}
+
 export const formatKeymap: KeyBinding[] = [
+  { key: 'Mod-Alt-f', run: insertFootnote },
   { key: 'Mod-b', run: toggleWrap('**') },
   { key: 'Mod-i', run: toggleWrap('*') },
   { key: 'Mod-e', run: toggleWrap('`') },

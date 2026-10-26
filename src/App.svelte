@@ -3,7 +3,7 @@
   import { app } from './lib/app.svelte'
   import Shell from './components/Shell.svelte'
   import Welcome from './components/Welcome.svelte'
-  import { applyAppearance } from './lib/appearance'
+  import { applyAppearance, wantsDark } from './lib/appearance'
 
   onMount(() => {
     void app.boot()
@@ -13,7 +13,7 @@
     const root = document.documentElement
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
     const apply = () => {
-      const dark = app.theme === 'dark' || (app.theme === 'auto' && mq.matches)
+      const dark = wantsDark(app.settings, app.theme, mq.matches)
       root.dataset.theme = dark ? 'dark' : 'light'
       applyAppearance(app.settings, dark, root)
       document.querySelector('meta[name=theme-color]')?.setAttribute('content', getComputedStyle(root).getPropertyValue('--bg').trim() || (dark ? '#1e1913' : '#fcf5e1'))

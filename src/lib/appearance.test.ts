@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildVars, contrastRatio, hexToRgb, normaliseHex, readableOn } from './appearance'
-import { DEFAULT_SETTINGS, normaliseSettings } from './settings'
+import { buildVars, contrastRatio, customPaletteVars, hexToRgb, lookOf, normaliseHex, readableOn, settingsFromLook, wantsDark } from './appearance'
+import { DEFAULT_SETTINGS, normaliseSettings, THEME_PRESETS } from './settings'
 import { actionFor, comboFromEvent, conflictFor, displayCombo, matches, parseCombo } from './shortcuts'
 
 describe('colour maths', () => {
@@ -84,5 +84,67 @@ describe('shortcuts', () => {
   })
   it('shows combos readably', () => {
     expect(displayCombo('Alt+ArrowLeft')).toEqual(['Alt', '←'])
+  })
+})
+
+describe('custom colours and themes', () => {
+  const custom = (over: Partial<typeof DEFAULT_SETTINGS.customColours> = {}) =>
+    ({ ...DEFAULT_SETTINGS, customColours: { ...DEFAULT_SETTINGS.customColours, enabled: true, bg: '#2e3440', text: '#d8dee9', dark: true, ...over } })
+
+  it('derives the interface colours from a background and text colour', () => {
+    const v = buildVars(custom(), true)
+    expect(v['--bg']).toBe('#2e3440')
+    expect(v['--text']).toBe('#d8dee9')
+    expect(v['--bg-side']).toContain('color-mix')
+    expect(v['--parchment']).toContain('#2e3440')
+    expect(buildVars(custom({ side: '#272c36' }), true)['--bg-side']).toBe('#272c36')
+  })
+
+  it('ignores custom colours that are off or invalid', () => {
+    expect(buildVars({ ...DEFAULT_SETTINGS }, false)['--bg']).toBeUndefined()
+    expect(customPaletteVars({ ...DEFAULT_SETTINGS.customColours, enabled: true, bg: 'nope' })).toBeNull()
+  })
+
+  it('custom colours decide light or dark', () => {
+    expect(wantsDark(custom(), 'light', false)).toBe(true)
+    expect(wantsDark(custom({ dark: false }), 'dark', true)).toBe(false)
+    expect(wantsDark(DEFAULT_SETTINGS, 'auto', true)).toBe(true)
+    expect(wantsDark(DEFAULT_SETTINGS, 'light', true)).toBe(false)
+  })
+
+  it('exposes the note colours as variables', () => {
+    const v = buildVars({ ...DEFAULT_SETTINGS, boldColour: '#ff0000', italicColour: '#00ff00', boldItalicColour: '#0000ff', headingColour: '#abc' }, false)
+    expect(v).toMatchObject({ '--md-bold': '#ff0000', '--italic': '#00ff00', '--md-bolditalic': '#0000ff', '--md-heading': '#aabbcc' })
+    expect(buildVars({ ...DEFAULT_SETTINGS, boldColour: 'banana' }, false)['--md-bold']).toBeUndefined()
+  })
+
+  it('saves and restores a look', () => {
+    const s = { ...DEFAULT_SETTINGS, accent: '#112233', boldColour: '#ff0000', headingFont: 'georgia', customColours: { ...DEFAULT_SETTINGS.customColours, enabled: true, bg: '#101010' } }
+    const look = lookOf(s, 'dark')
+    expect(look.scheme).toBe('dark')
+    const back = settingsFromLook(look)
+    expect(back).toMatchObject({ accent: '#112233', boldColour: '#ff0000', headingFont: 'georgia' })
+    expect(back.customColours?.bg).toBe('#101010')
+    expect((back as Record<string, unknown>).fontSize).toBeUndefined()
+  })
+
+  it('fills in what an older theme lacks and rejects bad colours', () => {
+    const back = settingsFromLook({ accent: 'not a colour', boldColour: '#fff' } as never)
+    expect(back).toMatchObject({ accent: '', boldColour: '#ffffff', headingFont: 'libron', lightPalette: 'parchment' })
+  })
+
+  it('every preset applies cleanly', () => {
+    for (const p of THEME_PRESETS) {
+      const merged = { ...DEFAULT_SETTINGS, ...settingsFromLook(p.look) }
+      const v = buildVars(merged, p.look.customColours.dark)
+      expect(v['--bg'], p.name).toMatch(/^#/)
+      expect(contrastRatio(p.look.customColours.bg, p.look.customColours.text), p.name).toBeGreaterThan(4.5)
+    }
+  })
+
+  it('themes survive being stored with the settings', () => {
+    const s = normaliseSettings({ themes: [{ id: 'a', name: 'A', look: lookOf(DEFAULT_SETTINGS, 'auto') }, { id: 3, name: 'bad' } as never] })
+    expect(s.themes).toHaveLength(1)
+    expect(normaliseSettings({ customColours: { enabled: true } as never }).customColours.bg).toBe('#fcf5e1')
   })
 })

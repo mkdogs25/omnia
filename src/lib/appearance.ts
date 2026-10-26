@@ -1,6 +1,6 @@
 // Turns settings into CSS custom properties on <html>. Colour maths lives here so it can be tested.
 
-import { FONTS, MONO_FONTS, PALETTES, type Settings } from './settings'
+import { FONTS, LOOK_KEYS, MONO_FONTS, PALETTES, type CustomColours, type Look, type Settings } from './settings'
 
 export function hexToRgb(hex: string): [number, number, number] | null {
   const m = hex.trim().match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i)
@@ -42,6 +42,72 @@ export function normaliseHex(input: string): string | null {
   return '#' + rgb.map(v => v.toString(16).padStart(2, '0')).join('')
 }
 
+/** Whether the page should use its dark tones, given the colour-mode choice and any custom colours. */
+export function wantsDark(s: Pick<Settings, 'customColours'>, scheme: 'auto' | 'light' | 'dark', systemDark: boolean): boolean {
+  if (s.customColours.enabled && normaliseHex(s.customColours.bg)) return s.customColours.dark
+  return scheme === 'dark' || (scheme === 'auto' && systemDark)
+}
+
+/** Interface colours worked out from just a background, a text colour and (optionally) a side-panel colour. */
+export function customPaletteVars(c: CustomColours): Record<string, string> | null {
+  const bg = normaliseHex(c.bg)
+  const text = normaliseHex(c.text)
+  if (!c.enabled || !bg || !text) return null
+  const side = normaliseHex(c.side) ?? `color-mix(in srgb, ${bg} 94%, ${text})`
+  const mix = (colour: string, pct: number, into = bg) => `color-mix(in srgb, ${colour} ${pct}%, ${into})`
+  return {
+    '--bg': bg,
+    '--bg-side': side,
+    '--bg-raised': c.dark ? mix('white', 7) : mix('white', 55),
+    '--border': mix(text, 14),
+    '--border-strong': mix(text, 26),
+    '--text': text,
+    '--text-muted': mix(text, 68),
+    '--text-faint': mix(text, 42),
+    '--bg-hover': `color-mix(in srgb, ${text} 8%, transparent)`,
+    '--bg-active': `color-mix(in srgb, ${text} 13%, transparent)`,
+    '--parchment': `linear-gradient(160deg, ${bg}, ${side})`
+  }
+}
+
+/** The part of the settings that makes up the look, for saving as a theme. */
+export function lookOf(s: Settings, scheme: Look['scheme']): Look {
+  const look: Record<string, unknown> = { scheme }
+  for (const k of LOOK_KEYS) if (k !== 'scheme') look[k] = plainCopy(s[k as keyof Settings])
+  return look as unknown as Look
+}
+
+// A deep copy that also works on Svelte state proxies.
+const plainCopy = <T>(v: T): T => JSON.parse(JSON.stringify(v ?? null))
+
+/** The settings a saved theme stands for. Anything the theme doesn't mention goes back to the default, so older themes still work. */
+export function settingsFromLook(look: Partial<Look>): Partial<Settings> {
+  const n = normaliseHexColours(look) as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  for (const k of LOOK_KEYS) if (k !== 'scheme') out[k] = n[k]
+  return out as Partial<Settings>
+}
+
+function normaliseHexColours(look: Partial<Look>): Partial<Look> {
+  const hex = (v: unknown) => (typeof v === 'string' ? normaliseHex(v) ?? '' : '')
+  return {
+    ...look,
+    accent: look.accent === undefined ? '' : hex(look.accent),
+    boldColour: hex(look.boldColour),
+    italicColour: hex(look.italicColour),
+    boldItalicColour: hex(look.boldItalicColour),
+    headingColour: hex(look.headingColour),
+    lightPalette: look.lightPalette ?? 'parchment',
+    darkPalette: look.darkPalette ?? 'mocha',
+    headingFont: look.headingFont ?? 'libron',
+    bodyFont: look.bodyFont ?? 'inter',
+    monoFont: look.monoFont ?? 'system-mono',
+    customHeadingFont: look.customHeadingFont ?? '',
+    customBodyFont: look.customBodyFont ?? '',
+    customColours: { enabled: false, dark: false, bg: '#fcf5e1', side: '', text: '#2a2218', ...(look.customColours ?? {}) }
+  }
+}
+
 const OWN_VARS = [
   '--font-heading', '--font-body', '--font-mono', '--ui-scale', '--editor-line', '--sidebar-w', '--right-w', '--row-h', '--row-min',
   '--accent', '--accent-strong', '--accent-soft', '--on-accent', '--italic', '--link'
@@ -53,8 +119,10 @@ const quote = (name: string) => `'${name.replace(/['\\]/g, '')}'`
 export function buildVars(s: Settings, isDark: boolean): Record<string, string> {
   const vars: Record<string, string> = {}
 
+  const own = customPaletteVars(s.customColours)
   const palette = PALETTES.find(p => p.id === (isDark ? s.darkPalette : s.lightPalette) && p.dark === isDark)
-  if (palette) Object.assign(vars, palette.vars)
+  if (own) Object.assign(vars, own)
+  else if (palette) Object.assign(vars, palette.vars)
 
   const heading = FONTS.find(f => f.id === s.headingFont)
   const body = FONTS.find(f => f.id === s.bodyFont)
@@ -73,6 +141,16 @@ export function buildVars(s: Settings, isDark: boolean): Record<string, string> 
     vars['--link'] = vars['--accent-strong']
     vars['--italic'] = vars['--accent-strong']
   }
+
+  // Colours for formatted text in notes. Blank leaves the built-in styling.
+  const bold = normaliseHex(s.boldColour)
+  const italic = normaliseHex(s.italicColour)
+  const both = normaliseHex(s.boldItalicColour)
+  const head = normaliseHex(s.headingColour)
+  if (bold) vars['--md-bold'] = bold
+  if (italic) vars['--italic'] = italic
+  if (both) vars['--md-bolditalic'] = both
+  if (head) vars['--md-heading'] = head
 
   vars['--ui-scale'] = String(s.uiScale)
   vars['--editor-line'] = String(s.lineHeight)

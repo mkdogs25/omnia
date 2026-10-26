@@ -17,19 +17,19 @@
 .editor .cm-activeLine { background: transparent; }
 
 /* Headings: Libron */
-.cm-h { font-family: var(--font-heading); font-weight: 700; line-height: 1.25; }
+.cm-h { font-family: var(--font-heading); font-weight: 700; line-height: 1.25; color: var(--md-heading, inherit); }
 .cm-h1 { font-size: 2.1em; padding: 1.1em 0 0.35em; border-bottom: 1px solid var(--border); margin-bottom: 0.6em; }
 .cm-h2 { font-size: 1.62em; padding: 1em 0 0.2em; }
 .cm-h3 { font-size: 1.32em; padding: 0.8em 0 0.1em; }
 .cm-h4 { font-size: 1.12em; padding: 0.6em 0 0; }
-.cm-h5, .cm-h6 { font-size: 1em; padding: 0.5em 0 0; color: var(--text-muted); }
+.cm-h5, .cm-h6 { font-size: 1em; padding: 0.5em 0 0; color: var(--md-heading, var(--text-muted)); }
 .cm-header-mark { font-family: var(--font-body); font-weight: 400; }
 .cm-formatting { color: var(--text-faint); font-weight: 400; font-style: normal; }
 .cm-formatting.cm-url { word-break: break-all; }
 
 /* Inline */
 .cm-em { font-style: italic; color: var(--italic); }
-.cm-strong { font-weight: 700; }
+.cm-strong { font-weight: 700; color: var(--md-bold, inherit); }
 .cm-strike { text-decoration: line-through; color: var(--text-muted); }
 .cm-highlight { background: var(--mark); border-radius: 3px; }
 .cm-inline-code {
@@ -95,3 +95,18 @@
 .editor .cm-panels input, .editor .cm-panels button { font: inherit; }
 .editor .cm-searchMatch { background: var(--mark) !important; }
 .editor .cm-searchMatch-selected { background: color-mix(in srgb, var(--accent) 40%, transparent) !important; }
+
+/* Footnotes */
+.editor .cm-fnref { color: var(--accent-strong); font-weight: 600; font-size: 0.72em; padding: 0 1px; margin: 0 1px; cursor: pointer; vertical-align: super; line-height: 0; }
+.editor .cm-fnref:hover { background: var(--accent-soft); border-radius: 3px; }
+.editor .cm-fnref-missing { color: var(--text-faint); text-decoration: underline dotted; }
+.editor .cm-fnref-src { color: var(--accent-strong); }
+.editor .cm-fn-def { font-size: 0.88em; color: var(--text-muted); }
+.editor .cm-fn-def.cm-fn-cont { padding-left: 1.6em; }
+.editor .cm-fn-label { display: inline-block; min-width: 1.6em; color: var(--accent-strong); font-weight: 600; }
+.editor .cm-fn-label.back { cursor: pointer; }
+.editor .cm-fn-label.back:hover { text-decoration: underline; }
+.editor .cm-fn-label.uncited { color: var(--text-faint); }
+
+/* Text that is both bold and italic gets its own colour (set on every span of the pair so it wins over either). */
+.editor .cm-bolditalic, .editor .cm-bolditalic.cm-em, .editor .cm-bolditalic.cm-strong { color: var(--md-bolditalic, var(--italic)); }

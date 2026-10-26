@@ -4,6 +4,7 @@
 
 import { syntaxTree } from '@codemirror/language'
 import { EditorState, Facet, RangeSet, StateField, type Range } from '@codemirror/state'
+import { plainFootnote, scanFootnotes, type Footnotes } from './footnotes'
 import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from '@codemirror/view'
 import katex from 'katex'
 import { WIKILINK_RE } from '../noteparse'
@@ -117,6 +118,67 @@ class ImageWidget extends WidgetType {
   }
 }
 
+// Footnote scans are per document, and the plugin rebuilds on every selection change, so remember the last one.
+let lastScan: { doc: EditorState['doc']; notes: Footnotes } | null = null
+function footnotesOf(doc: EditorState['doc']): Footnotes {
+  if (lastScan?.doc === doc) return lastScan.notes
+  const lines: string[] = []
+  for (let n = 1; n <= doc.lines; n++) lines.push(doc.line(n).text)
+  lastScan = { doc, notes: scanFootnotes(lines) }
+  return lastScan.notes
+}
+
+/** Moves the cursor to a position and scrolls it into the middle of the view. */
+function jumpTo(view: EditorView, pos: number) {
+  view.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: 'center' }) })
+  view.focus()
+}
+
+class FootnoteRefWidget extends WidgetType {
+  constructor(readonly id: string, readonly num: number, readonly tip: string | null) { super() }
+  eq(o: FootnoteRefWidget) { return o.id === this.id && o.num === this.num && o.tip === this.tip }
+  toDOM(view: EditorView) {
+    const el = document.createElement('sup')
+    el.className = this.tip === null ? 'cm-fnref cm-fnref-missing' : 'cm-fnref'
+    el.textContent = String(this.num)
+    el.title = this.tip === null ? 'No footnote text yet. Click to add it.' : this.tip
+    el.addEventListener('mousedown', e => {
+      e.preventDefault()
+      const fn = footnotesOf(view.state.doc)
+      const def = fn.defs.get(this.id)
+      if (def) return jumpTo(view, view.state.doc.line(def.line + 1).from + def.col + def.labelLength + 1)
+      // No text yet: start the footnote at the end of the note.
+      const end = view.state.doc.length
+      const insert = `${view.state.doc.sliceString(Math.max(0, end - 2), end) === '\n\n' ? '' : end && !view.state.doc.sliceString(end - 1, end).includes('\n') ? '\n\n' : '\n'}[^${this.id}]: `
+      view.dispatch({ changes: { from: end, insert }, selection: { anchor: end + insert.length }, effects: EditorView.scrollIntoView(end + insert.length, { y: 'center' }) })
+      view.focus()
+    })
+    return el
+  }
+  ignoreEvent() { return true }
+}
+
+class FootnoteLabelWidget extends WidgetType {
+  constructor(readonly id: string, readonly num: number, readonly cited: boolean) { super() }
+  eq(o: FootnoteLabelWidget) { return o.id === this.id && o.num === this.num && o.cited === this.cited }
+  toDOM(view: EditorView) {
+    const el = document.createElement('span')
+    el.className = 'cm-fn-label'
+    el.textContent = `${this.num}.`
+    el.title = this.cited ? 'Back to where this footnote is cited' : 'This footnote is never cited in the note'
+    if (this.cited) {
+      el.classList.add('back')
+      el.addEventListener('mousedown', e => {
+        e.preventDefault()
+        const ref = footnotesOf(view.state.doc).refs.find(r => r.id === this.id)
+        if (ref) jumpTo(view, view.state.doc.line(ref.line + 1).from + ref.col + ref.length)
+      })
+    } else el.classList.add('uncited')
+    return el
+  }
+  ignoreEvent() { return true }
+}
+
 /** Width in em of the bullet/number column for a list nesting depth. */
 const leadWidth = (depth: number) => 1.7 + depth * 1.6
 
@@ -152,6 +214,7 @@ function build(view: EditorView): DecorationSet {
     return sel.some(r => r.from <= line.to && r.to >= line.from)
   }
   const fmEnd = frontmatterEnd(doc)
+  const fn = footnotesOf(doc)
   const codeSpans: [number, number][] = []
   const fencedLines = new Set<number>()
   const fmEndPos = fmEnd ? doc.line(fmEnd).to : -1
@@ -183,8 +246,11 @@ function build(view: EditorView): DecorationSet {
           if (lineActive(nf)) ranges.push(mark('cm-formatting').range(nf, nt))
           else ranges.push(hide.range(nf, Math.min(nt + 1, doc.lineAt(nf).to)))
         } else if (name === 'Emphasis' || name === 'StrongEmphasis' || name === 'Strikethrough') {
-          const cls = name === 'Emphasis' ? 'cm-em' : name === 'StrongEmphasis' ? 'cm-strong' : 'cm-strike'
-          ranges.push(mark(cls).range(nf, nt))
+          const base = name === 'Emphasis' ? 'cm-em' : name === 'StrongEmphasis' ? 'cm-strong' : 'cm-strike'
+          // ***both*** nests one inside the other; give both spans a shared class so the pair can be coloured on its own.
+          const other = name === 'Emphasis' ? 'StrongEmphasis' : 'Emphasis'
+          const both = name !== 'Strikethrough' && (node.node.parent?.name === other || !!node.node.getChild(other))
+          ranges.push(mark(both ? `${base} cm-bolditalic` : base).range(nf, nt))
         } else if (name === 'EmphasisMark' || name === 'StrikethroughMark') {
           const p = node.node.parent!
           if (touches(p.from, p.to)) ranges.push(mark('cm-formatting').range(nf, nt))
@@ -317,6 +383,34 @@ function build(view: EditorView): DecorationSet {
               ranges.push(mark(cls, attrs).range(textFrom, textFrom + label.length))
               ranges.push(hide.range(start + m[0].length - 2, end))
             }
+          }
+        }
+      }
+
+      if (line.text.includes('[^') || (fn.defs.size && n - 1 >= fn.firstDefLine)) {
+        const here = n - 1
+        // Footnote definitions: `[^id]: text`, plus the indented lines that continue it.
+        for (const def of fn.defs.values()) {
+          if (here > def.line && here <= def.endLine) ranges.push(lineDeco('cm-fn-def cm-fn-cont').range(line.from))
+          else if (here === def.line) {
+            ranges.push(lineDeco('cm-fn-def').range(line.from))
+            const from = line.from + def.col
+            const to = from + def.labelLength
+            const spaces = line.text.slice(def.col + def.labelLength).match(/^[ \t]*/)![0].length
+            if (touches(line.from, line.to)) ranges.push(mark('cm-formatting').range(from, to))
+            else ranges.push(Decoration.replace({ widget: new FootnoteLabelWidget(def.id, fn.numbers.get(def.id) ?? 0, fn.refs.some(r => r.id === def.id)) }).range(from, to + spaces))
+          }
+        }
+        // Footnote references: `[^id]` becomes a small raised number that jumps to the text.
+        for (const r of fn.refs) {
+          if (r.line !== here) continue
+          const start = line.from + r.col
+          const end = start + r.length
+          if (inCode(start)) continue
+          if (touches(start, end)) ranges.push(mark('cm-fnref-src').range(start, end))
+          else {
+            const def = fn.defs.get(r.id)
+            ranges.push(Decoration.replace({ widget: new FootnoteRefWidget(r.id, fn.numbers.get(r.id) ?? 0, def ? plainFootnote(def.text) : null) }).range(start, end))
           }
         }
       }
