@@ -1,6 +1,9 @@
 <script lang="ts">
   import { app } from '../lib/app.svelte'
+  import { fsSupported } from '../lib/vault'
   import Icon from './Icon.svelte'
+
+  const fsOk = fsSupported()
 </script>
 
 <main class="welcome">
@@ -8,7 +11,12 @@
     <h1>Omnia</h1>
     <p class="lede">Notes, tasks, a calendar and spaced-repetition study tools, all kept in one folder of plain Markdown files.</p>
 
-    {#if app.status === 'unsupported'}
+    {#if app.status === 'welcome' && !app.vault && !fsOk && app.canUseDeviceStorage}
+      <p>Your notes will live inside this app on your phone. Turn on <strong>Sync</strong> in Settings and they stay in step with Omnia on your computer through a private GitHub repository.</p>
+      <div class="actions">
+        <button class="btn primary big" onclick={() => app.chooseDeviceStorage()}><Icon name="folder-open" /> Start on this device</button>
+      </div>
+    {:else if app.status === 'unsupported'}
       <div class="notice">
         <strong>This browser can't open folders.</strong>
         <p>Omnia needs the File System Access API, available in Chrome, Edge, Brave, Arc and Opera on desktop. Please open this page in one of those.</p>
@@ -23,6 +31,7 @@
       <p>Choose the folder where your Markdown notes live, or an empty folder to start fresh. Omnia only reads and writes inside that folder.</p>
       <div class="actions">
         <button class="btn primary big" onclick={() => app.chooseFolder()}><Icon name="folder-open" /> Choose a folder</button>
+        {#if app.canUseDeviceStorage}<button class="btn ghost big" title="Keeps notes inside the browser. Pair it with Sync so there is a copy elsewhere." onclick={() => app.chooseDeviceStorage()}>Use browser storage instead</button>{/if}
       </div>
     {/if}
 
@@ -31,7 +40,7 @@
     <ul class="facts">
       <li><Icon name="notes" size={16} /> Notes stay as <code>.md</code> files, so they open in any other editor.</li>
       <li><Icon name="check-square" size={16} /> Tasks, events and review history are stored in a hidden <code>.omnia</code> folder inside it.</li>
-      <li><Icon name="study" size={16} /> Nothing leaves your computer: there is no account and no server.</li>
+      <li><Icon name="study" size={16} /> Nothing leaves your device unless you turn on Sync, which uses a private repository of your own. There is no Omnia account or server.</li>
     </ul>
   </div>
 </main>

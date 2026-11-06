@@ -1,5 +1,12 @@
+import { isNativeApp } from './platform'
+
 /** Offers text or a blob to the user as a file download. */
 export function downloadFile(name: string, data: string | Blob, type = 'text/plain;charset=utf-8') {
+  // A WebView ignores <a download>; the Android app offers the file through the share sheet instead.
+  if (isNativeApp()) {
+    void import('./native.svelte').then(n => n.native.shareFile(name, data, type))
+    return
+  }
   const blob = typeof data === 'string' ? new Blob([data], { type }) : data
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

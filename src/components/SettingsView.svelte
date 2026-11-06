@@ -5,6 +5,7 @@
   import { downloadFile } from '../lib/download'
   import { notifier } from '../lib/notify.svelte'
   import { OCR_LANGUAGES } from '../lib/ocr'
+  import { isNativeApp } from '../lib/platform'
   import { pomodoro } from '../lib/pomodoro.svelte'
   import {
     ACCENT_PRESETS, ACTIONS, DEFAULT_CUSTOM_COLOURS, DEFAULT_SETTINGS, FONTS, MONO_FONTS, normaliseSettings, PALETTES, THEME_PRESETS, TOOLS,
@@ -14,6 +15,7 @@
   import ColourField from './ColourField.svelte'
   import Icon from './Icon.svelte'
   import Setting from './Setting.svelte'
+  import SyncSettings from './SyncSettings.svelte'
 
   let query = $state('')
   setContext('settings-query', () => query)
@@ -40,6 +42,7 @@
     { id: 'tools', label: 'Tools and home', icon: 'sliders' },
     { id: 'notes', label: 'Notes', icon: 'notes' },
     { id: 'tasks', label: 'Tasks and calendar', icon: 'check-square' },
+    { id: 'sync', label: 'Sync and phone', icon: 'refresh' },
     { id: 'notifications', label: 'Notifications', icon: 'bell' },
     { id: 'study', label: 'Study', icon: 'study' },
     { id: 'pomodoro', label: 'Pomodoro', icon: 'timer' },
@@ -506,6 +509,12 @@
         </Setting>
       </section>
 
+      <!-- ============================================================ SYNC -->
+      <section id="sec-sync">
+        <h2 class="section-title">Sync and phone</h2>
+        <SyncSettings />
+      </section>
+
       <!-- ============================================================ NOTIFICATIONS -->
       <section id="sec-notifications">
         <h2 class="section-title">Notifications</h2>
@@ -529,7 +538,11 @@
           <span class="muted">to</span>
           <input class="field time" type="time" disabled={!s.quietEnabled} value={s.quietEnd} onchange={e => set({ quietEnd: e.currentTarget.value || '07:00' })} aria-label="Quiet hours end" />
         </Setting>
-        <p class="note">Browsers can only show notifications while Omnia is open in a tab or window (a pinned or minimised tab is fine). Reminders that came due while it was closed appear when you next open it, up to 12 hours late.</p>
+        {#if isNativeApp()}
+          <p class="note">On your phone, reminders and the daily summary are handed to Android for the next two weeks and refreshed whenever your tasks or events change, so they arrive even when Omnia is closed. Open Omnia at least once every couple of weeks to top them up.</p>
+        {:else}
+          <p class="note">Browsers can only show notifications while Omnia is open in a tab or window (a pinned or minimised tab is fine). Reminders that came due while it was closed appear when you next open it, up to 12 hours late. The Android app doesn’t have this limit.</p>
+        {/if}
       </section>
 
       <!-- ============================================================ STUDY -->
@@ -688,4 +701,10 @@
   .row-actions { padding: 12px 0 6px; }
   .empty-search { padding: 20px 4px; }
   @media (max-width: 820px) { .body { grid-template-columns: 1fr; } .toc { display: none; } }
+  @media (max-width: 760px) {
+    .head { padding: 20px 16px 10px; }
+    .body { padding: 8px 12px 40px; }
+    section { padding: 16px 16px 8px; }
+    .fontrow .field, .savebar .field { width: 100%; }
+  }
 </style>

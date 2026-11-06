@@ -6,7 +6,7 @@ import { untrack } from 'svelte'
 import { addDays, today, type ISODate } from './dates'
 import {
   basename, companionPath, dirname, ensurePermission, forgetHandle, fsSupported, isDoc, isNote, joinPath, loadHandle, noteTitle,
-  pickFolder, saveHandle, Vault, type FileEntry, type FolderEntry
+  deviceStorageSupported, deviceVaultHandle, pickFolder, saveHandle, setDeviceStorage, usingDeviceStorage, Vault, type FileEntry, type FolderEntry
 } from './vault'
 import { NoteIndex, renameLinkTarget } from './noteindex'
 import { uid, toggle as toggleTaskPure, type CalEvent, type Task } from './tasks'
@@ -144,9 +144,28 @@ class AppState {
 
   // ---------------------------------------------------------------- vault lifecycle
 
+  /** Phones and other browsers without a folder picker keep their notes inside the app. */
+  get canUseDeviceStorage() {
+    return deviceStorageSupported()
+  }
+
+  async chooseDeviceStorage() {
+    try {
+      setDeviceStorage(true)
+      await this.openVault(await deviceVaultHandle(), 'This device')
+    } catch (e) {
+      setDeviceStorage(false)
+      this.error = `Couldn’t open storage on this device: ${(e as Error).message ?? e}`
+    }
+  }
+
   async boot() {
+    if (usingDeviceStorage() && deviceStorageSupported()) {
+      await this.chooseDeviceStorage()
+      return
+    }
     if (!fsSupported()) {
-      this.status = 'unsupported'
+      this.status = deviceStorageSupported() ? 'welcome' : 'unsupported'
       return
     }
     const handle = await loadHandle()
@@ -177,6 +196,7 @@ class AppState {
   }
 
   async closeVault() {
+    setDeviceStorage(false)
     await forgetHandle()
     this.vault = null
     this.tree = null
@@ -188,9 +208,9 @@ class AppState {
     this.status = 'welcome'
   }
 
-  async openVault(handle: FileSystemDirectoryHandle) {
+  async openVault(handle: FileSystemDirectoryHandle, label?: string) {
     this.error = ''
-    const vault = new Vault(handle)
+    const vault = new Vault(handle, label)
     this.vault = vault
     this.status = 'ready'
     try {
@@ -587,6 +607,7 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
         this.index.set(path, mtime, text)
         this.rebuildSoon()
         if (isNote(path)) void this.snapshotMaybe(path, text)
+        this.onLocalChange?.()
       } catch (e) {
         this.toast(`Could not save "${noteTitle(path)}": ${(e as Error).message}`)
       }
@@ -1210,12 +1231,33 @@ Tasks, the calendar and the study dashboard are in the left-hand ribbon. Press C
     setTimeout(() => (this.toasts = this.toasts.filter(x => x.id !== t.id)), action ? 8000 : 4000)
   }
 
+  /** Set while a sync is running: data files wait for it so a sync never overwrites a newer save. */
+  syncGate: Promise<void> | null = null
+  /** The sync controller listens here, to sync a little after things change. */
+  onLocalChange: (() => void) | null = null
+
   private async write(name: string, data: unknown) {
     try {
+      if (this.syncGate) await this.syncGate
       await this.vault?.writeJSON(name, data)
+      this.onLocalChange?.()
     } catch (e) {
       this.toast(`Could not save ${name}: ${(e as Error).message}`)
     }
+  }
+
+  /** After a sync changed files on disk: reload the data files that changed and rescan the notes. */
+  async reloadAfterSync(changed: string[]) {
+    const vault = this.vault
+    if (!vault) return
+    const has = (name: string) => changed.includes(`.omnia/${name}`)
+    if (has('tasks.json')) this.tasks = await vault.readJSON<Task[]>('tasks.json', [])
+    if (has('events.json')) this.events = await vault.readJSON<CalEvent[]>('events.json', [])
+    if (has('study.json')) this.study = { ...emptyStudy(), ...(await vault.readJSON<StudyData>('study.json', emptyStudy())) }
+    if (has('mistakes.json')) this.mistakes = normaliseMistakes(await vault.readJSON<unknown>('mistakes.json', []))
+    await this.refresh()
+    this.index.rebuild()
+    this.bump()
   }
 
   /** Writes everything immediately, e.g. before the page closes. */

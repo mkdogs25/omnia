@@ -107,10 +107,30 @@ Stack: Vite, Svelte 5, TypeScript and CodeMirror 6, with KaTeX for maths, PDF.js
 
 `npm run dev` and `npm run build` first copy the OCR engine and English language data from `node_modules` into `public/ocr/` (about 15 MB, git-ignored), so OCR works offline on the deployed site. Other OCR languages download from a CDN the first time they are used.
 
+## Android app and sync
+
+**Sync.** Settings → *Sync and phone* keeps Omnia on your computer and your phone in step through a **private GitHub repository** of yours:
+create an empty private repo, create a fine-grained token with *Contents: Read and write* for just that repo, paste both in, and press *Connect and sync*.
+There is no Omnia server or account. It syncs when the app opens, when you return to it, a minute after you stop editing, and on a timer; the button in the
+side bar (or *More* on a phone) syncs now.
+
+- Notes, PDFs, Word files, images, tasks, events, study progress, the error log and PDF highlights are synced. Settings, themes, the trash, version history and OCR text stay on each device.
+- Edits to different parts of a note merge automatically; so do tasks and events changed on different devices, and study counters add up. If two devices change the same lines, both versions are kept (the other device's under the original name, yours as `Name (conflict from Phone 2026-11-06 09-05).md`) and Settings lists them.
+- The token is stored only on the device, in `localStorage`, and sent only to GitHub.
+
+**Android app.** `.github/workflows/android.yml` wraps the site with [Capacitor](https://capacitorjs.com) and builds `Omnia.apk` on every push to `main`. Download it from the repository's **Releases** page (*Omnia for Android*) on your phone, open it, and allow installs from your browser when asked. It is a debug-signed APK, so Android shows its usual "unknown app" prompt and it will not update itself: install the new APK over the old one.
+
+- Phones can't pick a folder, so the app keeps the notes inside itself (*Start on this device*) and Sync is how they reach your computer and back up. The same *Use browser storage* option exists on desktop.
+- Phone layout: a bottom tab bar, the file list as a slide-over drawer, the study panel as a bottom sheet, and the calendar's day details under the month.
+- Reminders and the daily summary are scheduled with Android's alarm system for the next two weeks and refreshed whenever tasks or events change, so they arrive with Omnia closed. Allow notifications when asked.
+- The back button closes the open panel or dialog first. *Download* actions (CSV, searchable PDF, theme files) open the share sheet.
+- Build it yourself: `npm run android:sync`, then `npm run android:open` and run from Android Studio.
+
 ## Limits worth knowing
 
-- **Notifications only fire while Omnia is open** in a browser tab or window (a pinned or minimised tab is fine). A website cannot wake a closed browser. Reminders that fell due while it was closed appear when you next open it, up to 12 hours late. Chrome also needs you to allow notifications once.
-- **Chromium desktop only** (Chrome, Edge, Brave, Arc, Opera), because of the File System Access API.
+- **In a browser, notifications only fire while Omnia is open** in a tab or window (a pinned or minimised tab is fine). A website cannot wake a closed browser (the Android app can). Reminders that fell due while it was closed appear when you next open it, up to 12 hours late. Chrome also needs you to allow notifications once.
+- **In a browser, Chromium desktop** (Chrome, Edge, Brave, Arc, Opera) gives you a real folder, through the File System Access API. Other Chromium browsers, including Chrome on Android, can use *browser storage* plus Sync. Safari and Firefox are not supported.
+- Sync needs a GitHub account and has no live collaboration: devices exchange changes each time they sync. Files over 40 MB are skipped.
 - **OCR accuracy** depends on the scan. Searchable-PDF export writes Latin-alphabet text only (English, French, German, Spanish and the like); other scripts can be recognised and searched inside Omnia but are left out of the exported file. Rotated pages are left as they were.
 - **Auto-generation** is rule-based (see above), not AI, so it will miss ideas that do not follow those patterns.
 - Version history keeps a snapshot about every ten minutes while you write (up to 40 per note).

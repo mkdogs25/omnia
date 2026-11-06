@@ -37,4 +37,8 @@
   .text span { font-size: var(--fs-sm); color: var(--text-muted); line-height: 1.45; }
   .control { display: flex; align-items: center; gap: 8px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
   .stack .control { justify-content: flex-start; }
+  @media (max-width: 760px) {
+    .setting { flex-direction: column; align-items: stretch; gap: 8px; }
+    .control { flex: 1 1 auto; justify-content: flex-start; }
+  }
 </style>

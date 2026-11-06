@@ -1,4 +1,5 @@
 import { app } from './app.svelte'
+import { isNativeApp } from './platform'
 import { today } from './dates'
 import { buildDigest, dueReminders, hhmm, inQuietHours, localMoment } from './notify'
 import { dueRevisions } from './study'
@@ -84,10 +85,20 @@ class Notifier {
   }
 
   refreshPermission() {
+    if (isNativeApp()) {
+      void import('./native.svelte').then(async ({ native }) => { await native.refreshPermission(); this.permission = native.permission })
+      return
+    }
     this.permission = 'Notification' in window ? (Notification.permission as Permission) : 'unsupported'
   }
 
   async enable(): Promise<void> {
+    if (isNativeApp()) {
+      const { native } = await import('./native.svelte')
+      await native.requestPermission()
+      this.permission = native.permission
+      return
+    }
     if (!('Notification' in window)) return
     this.permission = (await Notification.requestPermission()) as Permission
     if (this.permission === 'granted') app.updateSettings({ notifEnabled: true })
@@ -108,6 +119,7 @@ class Notifier {
   }
 
   sendTest() {
+    if (isNativeApp()) void import('./native.svelte').then(({ native }) => native.notifyNow('Notifications are working', 'You will get your daily summary and reminders, even when Omnia is closed.'))
     this.send({ kind: 'system', title: 'Notifications are working', body: 'You will get your daily summary and reminders here.' })
   }
 

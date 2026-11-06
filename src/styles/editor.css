@@ -110,3 +110,6 @@
 
 /* Text that is both bold and italic gets its own colour (set on every span of the pair so it wins over either). */
 .editor .cm-bolditalic, .editor .cm-bolditalic.cm-em, .editor .cm-bolditalic.cm-strong { color: var(--md-bolditalic, var(--italic)); }
+
+html[data-mobile='1'] .editor .cm-content { padding: 0 16px; }
+html[data-mobile='1'] .editor .cm-scroller { padding-bottom: 30vh; }

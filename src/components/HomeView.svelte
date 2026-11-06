@@ -125,8 +125,9 @@
   .cap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   .bare { flex: 1; border: 0; outline: 0; background: transparent; font-size: var(--fs-lg); min-width: 0; padding: 6px 0; }
   .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
-  .card { background: var(--bg-raised); border: 1px solid var(--border); border-radius: 16px; padding: 18px 20px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+  @media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 760px) { .cap :global(.btn:not(.primary)) { display: none; } .cap { padding-left: 12px; } }
+  .card { overflow-wrap: anywhere; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 16px; padding: 18px 20px; display: grid; gap: 6px; align-content: start; min-width: 0; }
   .card.wide { grid-column: 1 / -1; }
   .head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
   .head .section-title { margin: 0; }

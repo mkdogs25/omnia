@@ -185,4 +185,13 @@
   .blank h2 { color: var(--text-faint); font-size: 28px; }
   .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
   .actions kbd { margin-left: 6px; }
+  @media (max-width: 760px) {
+    .tabbar { padding: 6px 8px 0; }
+    .navbar { padding: 4px 8px 0; }
+    .banner { margin: 6px 10px; }
+    .title { margin-top: 14px; padding: 0 16px; font-size: 2em; }
+    .crumbs { padding: 0 16px 2px; }
+    .status { display: none; }
+    .tab { padding: 7px 6px 7px 12px; max-width: 160px; }
+  }
 </style>

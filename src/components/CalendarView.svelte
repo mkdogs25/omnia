@@ -371,4 +371,20 @@
   .sw { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; }
   .sw.on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px currentColor; color: var(--text); }
   @media (max-width: 1100px) { .panel { display: none; } }
+  /* Phone: the day's details go under the month, and busy days show as dots. */
+  @media (max-width: 760px) {
+    .cal { flex-direction: column; overflow: auto; }
+    .main { padding: 18px 10px 8px; flex: none; }
+    header { gap: 10px; }
+    .grid { min-height: 340px; }
+    .chips { flex-direction: row; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
+    .chip, .chip.ev, .chip.task, .chip.flag { width: 7px; height: 7px; min-width: 0; padding: 0; border-radius: 50%; font-size: 0; overflow: hidden; }
+    .chip :global(svg), .chip .t, .more, .study { display: none; }
+    .chip, .chip.ev, .chip.task, .chip.flag { border: 0; box-shadow: none; flex: none; }
+    .chip.ev { background: var(--c, var(--accent)); }
+    .chip.task { background: var(--text-faint); }
+    .chip.task.done { opacity: 0.4; }
+    .chip.flag { background: var(--accent-strong); }
+    .panel { display: block; width: 100%; border-left: 0; border-top: 1px solid var(--border-strong); overflow: visible; flex: none; }
+  }
 </style>

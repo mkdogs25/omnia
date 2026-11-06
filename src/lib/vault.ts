@@ -38,6 +38,30 @@ export function fsSupported(): boolean {
   return typeof window !== 'undefined' && 'showDirectoryPicker' in window
 }
 
+// ---------------------------------------------------------------------------
+// Storage inside the browser or app itself (the origin private file system). Phones can't pick a folder, so this is
+// where their notes live; it is also a fallback on desktop. Sync keeps a copy elsewhere.
+
+const DEVICE_KEY = 'omnia:device-vault'
+const DEVICE_DIR = 'omnia-vault'
+
+export const deviceStorageSupported = () => typeof navigator !== 'undefined' && !!navigator.storage?.getDirectory
+
+export const usingDeviceStorage = () => {
+  try { return localStorage.getItem(DEVICE_KEY) === '1' } catch { return false }
+}
+
+export function setDeviceStorage(on: boolean) {
+  try { on ? localStorage.setItem(DEVICE_KEY, '1') : localStorage.removeItem(DEVICE_KEY) } catch { /* ignore */ }
+}
+
+export async function deviceVaultHandle(): Promise<FileSystemDirectoryHandle> {
+  const root = await navigator.storage.getDirectory()
+  // Ask the browser not to clear it under storage pressure; harmless if refused.
+  try { await navigator.storage.persist?.() } catch { /* ignore */ }
+  return root.getDirectoryHandle(DEVICE_DIR, { create: true })
+}
+
 export async function pickFolder(): Promise<FileSystemDirectoryHandle> {
   return (window as any).showDirectoryPicker({ id: 'omnia-vault', mode: 'readwrite' })
 }
@@ -51,10 +75,15 @@ export async function ensurePermission(handle: FileSystemDirectoryHandle, reques
 }
 
 export class Vault {
-  constructor(public readonly root: FileSystemDirectoryHandle) {}
+  constructor(public readonly root: FileSystemDirectoryHandle, private readonly label?: string) {}
 
   get name() {
-    return this.root.name
+    return this.label ?? this.root.name
+  }
+
+  /** True for the vault kept inside the browser or app, as opposed to a folder the user chose. */
+  get isDevice() {
+    return this.label !== undefined
   }
 
   private async dir(path: string, create = false): Promise<FileSystemDirectoryHandle> {
@@ -142,6 +171,33 @@ export class Vault {
     const w = await (fh as any).createWritable()
     await w.write(blob)
     await w.close()
+  }
+
+  /** Every file under the root (hidden folders included), skipping folders `skipDir` rejects. */
+  async listAll(skipDir: (path: string) => boolean = () => false): Promise<{ path: string; size: number; mtime: number }[]> {
+    const out: { path: string; size: number; mtime: number }[] = []
+    const walk = async (dir: FileSystemDirectoryHandle, prefix: string) => {
+      const pending: Promise<void>[] = []
+      for await (const [name, handle] of (dir as any).entries() as AsyncIterable<[string, FileSystemHandle]>) {
+        const p = joinPath(prefix, name)
+        if (handle.kind === 'directory') {
+          if (!skipDir(p)) pending.push(walk(handle as FileSystemDirectoryHandle, p))
+        } else {
+          pending.push((handle as FileSystemFileHandle).getFile().then(f => { out.push({ path: p, size: f.size, mtime: f.lastModified }) }))
+        }
+      }
+      await Promise.all(pending)
+    }
+    await walk(this.root, '')
+    return out
+  }
+
+  async readBytes(path: string): Promise<Uint8Array> {
+    return new Uint8Array(await (await this.readBlob(path)).arrayBuffer())
+  }
+
+  async writeBytes(path: string, bytes: Uint8Array): Promise<void> {
+    await this.writeBlob(path, new Blob([bytes as BlobPart]))
   }
 
   async exists(path: string): Promise<boolean> {

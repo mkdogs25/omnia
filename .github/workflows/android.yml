@@ -1,0 +1,56 @@
+# Builds the Android app (Omnia running in a WebView, via Capacitor) and publishes the APK.
+#
+# Get it: Releases -> "Omnia for Android" -> Omnia.apk (updated on every push to main), or the "omnia-android" artifact on any run.
+# It is a debug-signed APK: Android asks you to allow installs from your browser or file manager the first time.
+name: Android app
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci
+      - name: Build the web app
+        run: npm run build
+      - name: Copy it into the Android project
+        run: npx cap sync android
+      - name: Build the APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Name the file
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk Omnia.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omnia-android
+          path: Omnia.apk
+          retention-days: 30
+      - name: Publish to Releases
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete android-latest --yes --cleanup-tag || true
+          gh release create android-latest Omnia.apk \
+            --title "Omnia for Android" \
+            --notes "Debug-signed APK built from commit ${GITHUB_SHA::7}. Download Omnia.apk on your phone and open it. Android will ask you to allow installs from this source the first time."
