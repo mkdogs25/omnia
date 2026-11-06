@@ -5,11 +5,12 @@
     startOfWeek, today, toISO, weekdayOrder, WEEKDAYS, MONTHS, type ISODate
   } from '../lib/dates'
   import { describeRecurrence, type Recurrence } from '../lib/recurrence'
-  import { parseQuickAdd } from '../lib/quickadd'
+  import { parseEventQuickAdd, parseQuickAdd } from '../lib/quickadd'
   import { forecast, dueRevisions } from '../lib/study'
   import { eventsInRange, itemsInRange, overdue, withDeadlines, type CalEvent } from '../lib/tasks'
   import { noteTitle } from '../lib/vault'
   import Icon from './Icon.svelte'
+  import RepeatPicker from './RepeatPicker.svelte'
   import TaskRow from './TaskRow.svelte'
 
   const COLORS = ['#d95c3a', '#5f8a3c', '#3f7ca8', '#8a5fa8', '#c98a12']
@@ -20,6 +21,7 @@
   let cursor = $state<ISODate>(today())
   let editing = $state<CalEvent | null>(null)
   let quick = $state('')
+  let quickEvent = $state('')
   let dragOver = $state<ISODate | null>(null)
 
   const now = $derived(today())
@@ -87,6 +89,21 @@
     quick = ''
   }
 
+  const parsedEvent = $derived(quickEvent.trim() ? parseEventQuickAdd(quickEvent, now) : null)
+
+  function addQuickEvent() {
+    const text = quickEvent.trim()
+    if (!text) return
+    const p = parseEventQuickAdd(text, now)
+    const ev = app.addEvent({
+      title: p.title, date: p.date ?? selected, start: p.start, end: p.end, recur: p.recur, remindMin: p.remindMin,
+      color: COLORS[app.events.length % COLORS.length]
+    })
+    quickEvent = ''
+    // Show the day it landed on so the new event is visible.
+    if (ev.date !== selected) { selected = ev.date; cursor = ev.date }
+  }
+
   function newEvent() {
     const ev = app.addEvent({ title: 'New event', date: selected, color: COLORS[0] })
     editing = ev
@@ -100,12 +117,6 @@
     if (!editing) return
     app.updateEvent(editing.id, patch)
     editing = app.events.find(e => e.id === editing!.id) ?? null
-  }
-
-  type RepeatKind = 'none' | 'day' | 'week' | 'month' | 'year'
-  const repeatOf = (r?: Recurrence): RepeatKind => (!r ? 'none' : r.every === 1 ? r.unit : 'none')
-  function setRepeat(kind: RepeatKind) {
-    patchEvent({ recur: kind === 'none' ? undefined : { unit: kind, every: 1 } })
   }
 
   function removeEvent() {
@@ -217,10 +228,9 @@
           <input class="field" value={editing.title} aria-label="Event title" onchange={e => patchEvent({ title: e.currentTarget.value.trim() || 'Untitled event' })} />
           <div class="two">
             <label>Date<input class="field" type="date" value={editing.date} onchange={e => e.currentTarget.value && patchEvent({ date: e.currentTarget.value })} /></label>
-            <label>Repeat
-              <select class="field" value={repeatOf(editing.recur)} onchange={e => setRepeat(e.currentTarget.value as RepeatKind)}>
-                <option value="none">Never</option><option value="day">Daily</option><option value="week">Weekly</option><option value="month">Monthly</option><option value="year">Yearly</option>
-              </select></label>
+          </div>
+          <div class="repeat"><span class="lab">Repeat</span>
+            <RepeatPicker recur={editing.recur} anchor={editing.date} onchange={(r, date) => patchEvent({ recur: r, date })} />
           </div>
           <div class="two">
             <label>Starts<input class="field" type="time" value={editing.start ?? ''} onchange={e => patchEvent({ start: e.currentTarget.value || undefined })} /></label>
@@ -254,6 +264,20 @@
               </span>
             </button>
           {:else}<p class="faint none">No events.</p>{/each}
+          <form class="addtask" onsubmit={e => { e.preventDefault(); addQuickEvent() }}>
+            <Icon name="plus" size={15} /><input bind:value={quickEvent} placeholder="Add event: Dentist tomorrow 3pm" aria-label="Add event" />
+          </form>
+          {#if parsedEvent}
+            <div class="parsed" aria-live="polite">
+              <span class="pchip">{parsedEvent.title}</span>
+              <span class="pchip"><Icon name="calendar" size={11} /> {formatLong(parsedEvent.date ?? selected)}</span>
+              {#if parsedEvent.start}<span class="pchip">{formatTime(parsedEvent.start)}{parsedEvent.end ? ` – ${formatTime(parsedEvent.end)}` : ''}</span>{/if}
+              {#if parsedEvent.recur}<span class="pchip"><Icon name="repeat" size={11} /> {describeRecurrence(parsedEvent.recur, parsedEvent.date ?? selected)}</span>{/if}
+              {#if parsedEvent.remindMin !== undefined}<span class="pchip"><Icon name="bell" size={11} /> {parsedEvent.remindMin ? `${parsedEvent.remindMin >= 1440 ? parsedEvent.remindMin / 1440 + ' day' : parsedEvent.remindMin >= 60 ? parsedEvent.remindMin / 60 + ' h' : parsedEvent.remindMin + ' min'} before` : 'at the start'}</span>{/if}
+            </div>
+          {:else}
+            <p class="tip">Try “Math class <b>every 2 weeks on mon fri</b> 9-10:30am”, “Dentist <b>tomorrow at 3pm</b>”.</p>
+          {/if}
         </section>
 
         <section>
@@ -323,6 +347,11 @@
   .pad { padding: 48px 24px 60px; display: grid; gap: 18px; }
   .when .section-title { margin-bottom: 4px; }
   .daily { justify-self: start; }
+  .repeat { display: grid; gap: 4px; }
+  .repeat .lab { font-size: var(--fs-xs); color: var(--text-muted); }
+  .parsed { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+  .pchip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 9px; border-radius: 99px; background: var(--bg-active); font-size: var(--fs-xs); }
+  .tip { margin: 6px 2px 0; font-size: var(--fs-xs); color: var(--text-faint); line-height: 1.5; }
   .sec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
   .none { margin: 4px 0; font-size: var(--fs-sm); }
   .ev-row { display: flex; align-items: stretch; gap: 10px; width: 100%; text-align: left; padding: 6px 8px; border-radius: 8px; }

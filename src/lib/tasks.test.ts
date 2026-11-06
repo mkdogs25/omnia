@@ -57,3 +57,12 @@ describe('subtasks, rescheduling and reminders', () => {
     expect(reminderMoment('2026-10-30', { daysBefore: 0, time: '09:00' })).toBe('2026-10-30T09:00')
   })
 })
+
+describe('repeat on several days every other week', () => {
+  it('lists the right dates', async () => {
+    const { occurrencesBetween } = await import('./recurrence')
+    // Anchored on Sunday 8 Nov 2026; weeks run Monday to Sunday, so that week's Monday is the 2nd.
+    const rule = { unit: 'week' as const, every: 2, weekdays: [0, 1, 5] }
+    expect(occurrencesBetween('2026-11-08', rule, '2026-11-08', '2026-11-30')).toEqual(['2026-11-08', '2026-11-16', '2026-11-20', '2026-11-22', '2026-11-30'])
+  })
+})

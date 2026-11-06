@@ -65,6 +65,8 @@ export function describeRecurrence(rule: Recurrence, anchor?: ISODate): string {
   if (rule.unit === 'week') {
     const days = rule.weekdays?.length ? [...rule.weekdays].sort((x, y) => ((x + 6) % 7) - ((y + 6) % 7)) : anchor ? [weekday(anchor)] : []
     const names = days.map(d => WEEKDAYS[d])
+    if (every === 1 && days.length === 7) return 'Every day'
+    if (every === 1 && days.length === 5 && [1, 2, 3, 4, 5].every(d => days.includes(d))) return 'Every weekday'
     if (every === 1) return names.length ? `Every ${joinNames(names)}` : 'Every week'
     if (every === 2 && !names.length) return 'Every fortnight'
     return names.length ? `Every ${every} weeks on ${joinNames(names)}` : `Every ${every} weeks`

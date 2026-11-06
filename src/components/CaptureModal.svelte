@@ -1,12 +1,12 @@
 <script lang="ts">
   import { app } from '../lib/app.svelte'
-  import { formatLong, today } from '../lib/dates'
+  import { formatLong, formatTime, today } from '../lib/dates'
   import { describeRecurrence } from '../lib/recurrence'
-  import { parseQuickAdd } from '../lib/quickadd'
+  import { parseEventQuickAdd, parseQuickAdd } from '../lib/quickadd'
   import Icon from './Icon.svelte'
   import Modal from './Modal.svelte'
 
-  type Kind = 'task' | 'note' | 'card'
+  type Kind = 'task' | 'event' | 'note' | 'card'
   let kind = $state<Kind>('task')
   let text = $state('')
   let back = $state('')
@@ -14,6 +14,7 @@
 
   const now = today()
   const parsed = $derived(kind === 'task' && text.trim() ? parseQuickAdd(text, now) : null)
+  const parsedEvent = $derived(kind === 'event' && text.trim() ? parseEventQuickAdd(text, now) : null)
   const ready = $derived(kind === 'card' ? !!text.trim() && !!back.trim() : !!text.trim())
 
   $effect(() => {
@@ -27,6 +28,10 @@
       const p = parseQuickAdd(text, now)
       app.addTask({ title: p.title, due: p.due, deadline: p.deadline, recur: p.recur })
       app.toast(p.due || p.deadline ? `Task added for ${formatLong((p.due ?? p.deadline)!)}` : 'Task added to Unplanned')
+    } else if (kind === 'event') {
+      const p = parseEventQuickAdd(text, now)
+      const ev = app.addEvent({ title: p.title, date: p.date ?? now, start: p.start, end: p.end, recur: p.recur, remindMin: p.remindMin })
+      app.toast(`Event added for ${formatLong(ev.date)}`)
     } else if (kind === 'note') {
       const path = await app.captureToInbox(text, 'note')
       if (path) app.toast(`Added to ${app.settings.inboxNote || 'Inbox'}`, { label: 'Open', run: () => app.openNote(path) })
@@ -42,7 +47,7 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter' && (kind === 'task' || e.ctrlKey || e.metaKey) && !e.isComposing) {
+    if (e.key === 'Enter' && (kind === 'task' || kind === 'event' || e.ctrlKey || e.metaKey) && !e.isComposing) {
       e.preventDefault()
       void submit(e.shiftKey)
     }
@@ -53,6 +58,7 @@
   <div class="cap">
     <div class="tabs-pill" role="tablist" aria-label="What to capture">
       <button role="tab" aria-selected={kind === 'task'} class:on={kind === 'task'} onclick={() => (kind = 'task')}>Task</button>
+      <button role="tab" aria-selected={kind === 'event'} class:on={kind === 'event'} onclick={() => (kind = 'event')}>Event</button>
       <button role="tab" aria-selected={kind === 'note'} class:on={kind === 'note'} onclick={() => (kind = 'note')}>Note</button>
       <button role="tab" aria-selected={kind === 'card'} class:on={kind === 'card'} onclick={() => (kind = 'card')}>Flashcard</button>
     </div>
@@ -67,6 +73,16 @@
           {#if parsed.recur}<span class="chip"><Icon name="repeat" size={12} /> {describeRecurrence(parsed.recur, parsed.due)}</span>{/if}
         </div>
       {:else}<p class="hint">Dates are understood: “tomorrow”, “by 31 oct”, “every tuesday”.</p>{/if}
+    {:else if kind === 'event'}
+      <input class="field big" bind:this={box} bind:value={text} {onkeydown} placeholder="Dentist tomorrow at 3pm · Math class every 2 weeks on mon fri 9-10:30am" aria-label="Event" />
+      {#if parsedEvent}
+        <div class="chips">
+          <span class="chip">{parsedEvent.title || '…'}</span>
+          <span class="chip"><Icon name="calendar" size={12} /> {formatLong(parsedEvent.date ?? now)}</span>
+          {#if parsedEvent.start}<span class="chip">{formatTime(parsedEvent.start)}{parsedEvent.end ? ` – ${formatTime(parsedEvent.end)}` : ''}</span>{/if}
+          {#if parsedEvent.recur}<span class="chip"><Icon name="repeat" size={12} /> {describeRecurrence(parsedEvent.recur, parsedEvent.date ?? now)}</span>{/if}
+        </div>
+      {:else}<p class="hint">Say when: “friday 2-3pm”, “tomorrow at 9”, and add “remind me 30 minutes before”.</p>{/if}
     {:else if kind === 'note'}
       <textarea class="field" bind:this={box} bind:value={text} {onkeydown} rows="4" placeholder="A thought, a link, something to look up later…" aria-label="Note"></textarea>
       <p class="hint">Goes to <strong>{app.settings.inboxNote || 'Inbox'}</strong>. Sort it into a proper note whenever you like.</p>
@@ -77,7 +93,7 @@
     {/if}
 
     <div class="foot">
-      <span class="hint">{kind === 'task' ? 'Enter' : 'Ctrl+Enter'} to add · Shift to add another · Esc to close</span>
+      <span class="hint">{kind === 'task' || kind === 'event' ? 'Enter' : 'Ctrl+Enter'} to add · Shift to add another · Esc to close</span>
       <span class="grow"></span>
       <button class="btn primary" disabled={!ready} onclick={() => submit()}>Add</button>
     </div>

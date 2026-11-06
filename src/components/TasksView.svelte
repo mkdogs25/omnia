@@ -151,7 +151,7 @@
       {/if}
     </form>
     {#if focused && !draft}
-      <p class="tip">Try “Essay <b>by friday</b>”, “Weekly revision <b>every saturday</b>” or “Lab report <b>tomorrow</b>, deadline <b>31 oct</b>”.</p>
+      <p class="tip">Try “Essay <b>by friday</b>”, “Gym <b>every week on mon thu fri</b>” or “Lab report <b>tomorrow</b>, deadline <b>31 oct</b>”.</p>
     {/if}
 
     {#if tab === 'today' || tab === 'upcoming'}
